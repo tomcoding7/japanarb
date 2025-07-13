@@ -92,38 +92,58 @@ class BuyeeScraper:
     def setup_driver(self):
         """Set up and configure Chrome WebDriver with stealth mode."""
         try:
-            chrome_options = Options()
-            
-            # Basic options
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            
-            # Stealth mode configuration
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            if self.headless:
-                chrome_options.add_argument('--headless=new')
-            
-            # Set up service
-            service = Service(ChromeDriverManager().install())
-            
-            # Initialize driver
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            # Apply stealth mode
-            stealth(
-                self.driver,
-                languages=["ja-JP", "ja"],
-                vendor="Google Inc.",
-                platform="Win32",
-                webgl_vendor="Intel Inc.",
-                renderer="Intel Iris OpenGL Engine",
-                fix_hairline=True,
-            )
-            
-            logger.info("WebDriver initialized successfully")
+            # Try undetected-chromedriver first
+            try:
+                import undetected_chromedriver as uc
+                logger.info("Using undetected-chromedriver for better stealth")
+                
+                options = uc.ChromeOptions()
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--window-size=1920,1080')
+                
+                if self.headless:
+                    options.add_argument('--headless=new')
+                
+                self.driver = uc.Chrome(options=options)
+                logger.info("Successfully initialized undetected-chromedriver")
+                
+            except ImportError:
+                logger.warning("undetected-chromedriver not available, falling back to regular Selenium")
+                # Fallback to regular Selenium
+                chrome_options = Options()
+                
+                # Basic options
+                chrome_options.add_argument('--no-sandbox')
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                
+                # Stealth mode configuration
+                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+                chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+                
+                if self.headless:
+                    chrome_options.add_argument('--headless=new')
+                
+                # Set up service
+                service = Service(ChromeDriverManager().install())
+                
+                # Initialize driver
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                
+                # Apply stealth mode
+                stealth(
+                    self.driver,
+                    languages=["ja-JP", "ja"],
+                    vendor="Google Inc.",
+                    platform="Win32",
+                    webgl_vendor="Intel Inc.",
+                    renderer="Intel Iris OpenGL Engine",
+                    fix_hairline=True,
+                )
+                
+                logger.info("WebDriver initialized successfully with stealth mode")
             
         except Exception as e:
             logger.error(f"Failed to setup WebDriver: {str(e)}")
@@ -1101,11 +1121,19 @@ class BuyeeScraper:
                         # Check if the item is valuable based on both analyzers
                         is_valuable = (
                             detailed_info['card_details'].get('is_valuable', False) and
-                            detailed_info['card_details'].get('confidence_score', 0) >= 0.6 and
-                            self.rank_analyzer.is_good_condition(
-                                CardCondition(detailed_info['card_details'].get('condition', 'UNKNOWN'))
-                            )
+                            detailed_info['card_details'].get('confidence_score', 0) >= 0.3
                         )
+                        
+                        # Optional: also check condition if available (but don't require it)
+                        if is_valuable and detailed_info['card_details'].get('condition'):
+                            try:
+                                condition = CardCondition(detailed_info['card_details'].get('condition'))
+                                is_good_condition = self.rank_analyzer.is_good_condition(condition)
+                                if not is_good_condition:
+                                    logger.info(f"Item has poor condition, but still valuable: {detailed_info['title']}")
+                            except:
+                                # If condition check fails, still consider it valuable
+                                pass
                         
                         if is_valuable:
                             logger.info(f"Found valuable item: {detailed_info['title']}")
@@ -1611,6 +1639,7 @@ class BuyeeScraper:
             
             # Valuable card names (both Japanese and English)
             valuable_card_names = [
+                # Classic valuable cards
                 'デーモンの召喚', 'Summoned Skull',
                 'ブルーアイズ', 'Blue-Eyes', 'ブラックマジシャン', 'Dark Magician',
                 '真紅眼の黒竜', 'Red-Eyes Black Dragon',
@@ -1624,7 +1653,21 @@ class BuyeeScraper:
                 'マジシャンズ・ヴァルキリア', 'Magician\'s Valkyria',
                 'チョコレート・マジシャン・ガール', 'Chocolate Magician Girl',
                 '青き眼の乙女', 'Maiden with Eyes of Blue',
-                'ドラゴン・ナイト・ガイア', 'Dragon Knight Gaia'
+                'ドラゴン・ナイト・ガイア', 'Dragon Knight Gaia',
+                
+                # Modern valuable cards
+                'ブラックマジシャンガール', 'Black Magician Girl', 'Dark Magician Girl',
+                '竜騎士ブラックマジシャンガール', 'Dragon Knight Black Magician Girl',
+                'PSA', 'BGS', 'CGC',  # Graded cards
+                'プリズマティックシークレット', 'Prismatic Secret',
+                'クォーターセンチュリー', 'Quarter Century',
+                '25th', '25周年', '25th Anniversary',
+                'アニバーサリー', 'Anniversary',
+                'WCS', 'World Championship',
+                '来場者記念品', 'Event Prize',
+                'プロモ', 'Promotional',
+                '限定', 'Limited Edition',
+                '特典', 'Bonus Card'
             ]
             
             # Valuable sets, promos, and editions
