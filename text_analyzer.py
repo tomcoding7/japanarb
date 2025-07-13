@@ -3,18 +3,13 @@ import re
 import logging
 import os
 import json
-import openai
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-openai.api_key = os.getenv('OPENAI_API_KEY')
 
 class TextAnalyzer:
     def __init__(self):
-        # Initialize OpenAI client
-        self.client = openai.OpenAI()
-        
         # Card name patterns (both English and Japanese)
         self.card_name_patterns = [
             r'Blue-Eyes White Dragon|青眼の白龍',
@@ -85,93 +80,28 @@ class TextAnalyzer:
         ]
 
     def analyze_text(self, text: str) -> Dict[str, Any]:
-        """Analyze text using OpenAI's API with improved error handling."""
+        """Analyze text using rule-based methods."""
         try:
-            # Prepare the prompt
-            prompt = f"""Analyze this Yu-Gi-Oh card listing and extract key information:
-            {text}
+            # Use rule-based analysis
+            analysis = self._analyze_with_rules(text, text)
             
-            Please provide a structured analysis with the following information:
-            1. Card Name
-            2. Set Code
-            3. Card Number
-            4. Rarity
-            5. Edition (1st Edition or Unlimited)
-            6. Language/Region
-            7. Condition
-            8. Is this a valuable card? (Yes/No)
-            9. Confidence Score (0-1)
-            10. Matched Keywords
-            
-            Format the response as a JSON object."""
-
-            # Make the API call with the updated model
-            response = openai.ChatCompletion.create(
-                model="gpt-4-turbo-preview",  # Updated model name
-                messages=[
-                    {"role": "system", "content": "You are a Yu-Gi-Oh card expert. Analyze the listing and provide structured information."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500
+            # Add confidence score
+            analysis['confidence_score'] = self._calculate_confidence_score(
+                card_name=analysis.get('card_name_jp'),
+                set_code=analysis.get('set_code'),
+                card_number=analysis.get('card_number'),
+                rarity=analysis.get('rarity_jp'),
+                edition=analysis.get('edition_jp'),
+                region=analysis.get('language'),
+                condition_keywords=analysis.get('condition_notes_from_description', []),
+                value_indicators=self._extract_value_indicators(text)
             )
+            
+            return analysis
 
-            # Extract and parse the response
-            analysis_text = response.choices[0].message.content
-            try:
-                analysis = json.loads(analysis_text)
-                return analysis
-            except json.JSONDecodeError:
-                logging.error(f"Failed to parse OpenAI response as JSON: {analysis_text}")
-                return {
-                    "error": "Failed to parse analysis",
-                    "raw_response": analysis_text
-                }
-
-        except openai.error.APIError as e:
-            logging.error(f"OpenAI API error: {str(e)}")
-            return {"error": f"API error: {str(e)}"}
         except Exception as e:
             logging.error(f"Error in text analysis: {str(e)}")
             return {"error": f"Analysis error: {str(e)}"}
-
-    def _analyze_with_llm(self, title: str, description: str) -> Optional[Dict[str, Any]]:
-        """Analyze text using OpenAI's GPT model."""
-        try:
-            # Construct the prompt
-            prompt = f"""Given the following Japanese item title and description for a trading card:
-Title: "{title}"
-Description: "{description}"
-
-Extract the following information into a structured JSON object with these exact keys: "card_name_jp", "card_name_en", "set_name_jp", "set_code", "card_number", "rarity_jp", "rarity_en", "edition_jp", "edition_en", "language", "condition_notes_from_description", "seller_rank_from_description".
-If information for a key is not present, use null or an empty string for its value. Focus on information explicitly stated or strongly implied. For "condition_notes_from_description", list all phrases related to condition. For "seller_rank_from_description", extract only the rank (e.g., "A", "S", "B+").
-
-Return ONLY the JSON object, no other text."""
-
-            # Make the API call
-            response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",  # Using the latest GPT-4 model
-                messages=[
-                    {"role": "system", "content": "You are a specialized parser for Japanese trading card listings. Extract structured information from the given text and return it as a JSON object."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,  # Low temperature for more consistent results
-                max_tokens=500
-            )
-            
-            # Extract and parse the JSON response
-            try:
-                json_str = response.choices[0].message.content.strip()
-                # Remove any markdown code block markers
-                json_str = re.sub(r'^```json\s*|\s*```$', '', json_str)
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logging.error(f"Failed to parse LLM response as JSON: {str(e)}")
-                return None
-            
-        except Exception as e:
-            logging.error(f"Error in LLM analysis: {str(e)}")
-            return None
 
     def _analyze_with_rules(self, title: str, description: str) -> Dict[str, Any]:
         """Analyze text using rule-based methods."""
@@ -273,8 +203,7 @@ Return ONLY the JSON object, no other text."""
 
     def _extract_value_indicators(self, text: str) -> List[str]:
         """Extract value indicators from text."""
-        return [indicator for indicator in self.value_indicators 
-                if indicator.lower() in text.lower()]
+        return [indicator for indicator in self.value_indicators if indicator.lower() in text.lower()]
 
     def _calculate_confidence_score(self,
                                   card_name: Optional[str],
@@ -285,51 +214,55 @@ Return ONLY the JSON object, no other text."""
                                   region: Optional[str],
                                   condition_keywords: List[str],
                                   value_indicators: List[str]) -> float:
-        """Calculate confidence score based on extracted information."""
+        """Calculate confidence score based on available information."""
         score = 0.0
+        total_weight = 0.0
         
-        # Card name score
+        # Weights for different components
+        weights = {
+            'card_name': 0.3,
+            'set_info': 0.2,
+            'rarity': 0.15,
+            'edition': 0.1,
+            'region': 0.1,
+            'condition': 0.1,
+            'value_indicators': 0.05
+        }
+        
+        # Card name
         if card_name:
-            score += 0.2
+            score += weights['card_name']
+        total_weight += weights['card_name']
         
-        # Set code and card number score
+        # Set information
         if set_code and card_number:
-            score += 0.15
+            score += weights['set_info']
+        total_weight += weights['set_info']
         
-        # Rarity score
+        # Rarity
         if rarity:
-            if rarity.lower() in ['ghost rare', 'ultimate rare', 'starlight rare', 'quarter century']:
-                score += 0.15
-            elif rarity.lower() in ['secret rare', 'collector\'s rare', 'prismatic secret rare']:
-                score += 0.1
-            elif rarity.lower() in ['ultra rare', 'gold rare', 'platinum rare']:
-                score += 0.08
-            elif rarity.lower() in ['super rare', 'parallel rare']:
-                score += 0.05
-            elif rarity.lower() == 'rare':
-                score += 0.03
+            score += weights['rarity']
+        total_weight += weights['rarity']
         
-        # Edition score
-        if edition == '1st edition':
-            score += 0.1
+        # Edition
+        if edition:
+            score += weights['edition']
+        total_weight += weights['edition']
         
-        # Region score
+        # Region
         if region:
-            if region.lower() in ['japanese', 'asia']:
-                score += 0.08
-            else:
-                score += 0.05
+            score += weights['region']
+        total_weight += weights['region']
         
-        # Condition keywords score
-        if len(condition_keywords) >= 2:
-            score += 0.1
-        elif len(condition_keywords) == 1:
-            score += 0.05
+        # Condition
+        if condition_keywords:
+            score += weights['condition']
+        total_weight += weights['condition']
         
-        # Value indicators score
-        if len(value_indicators) >= 2:
-            score += 0.1
-        elif len(value_indicators) == 1:
-            score += 0.05
+        # Value indicators
+        if value_indicators:
+            score += weights['value_indicators']
+        total_weight += weights['value_indicators']
         
-        return min(score, 1.0)  # Cap at 1.0 
+        # Calculate final score
+        return score / total_weight if total_weight > 0 else 0.0 
