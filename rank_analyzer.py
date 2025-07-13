@@ -6,15 +6,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CardCondition(Enum):
-    MINT = "Mint"
-    NEAR_MINT = "Near Mint"
-    EXCELLENT = "Excellent"
-    VERY_GOOD = "Very Good"
-    GOOD = "Good"
-    LIGHT_PLAYED = "Light Played"
-    PLAYED = "Played"
-    POOR = "Poor"
-    UNKNOWN = "Unknown"
+    MINT = "MINT"
+    NEAR_MINT = "NEAR_MINT"
+    EXCELLENT = "EXCELLENT"
+    VERY_GOOD = "VERY_GOOD"
+    GOOD = "GOOD"
+    LIGHT_PLAYED = "LIGHT_PLAYED"
+    PLAYED = "PLAYED"
+    HEAVILY_PLAYED = "HEAVILY_PLAYED"
+    DAMAGED = "DAMAGED"
+    UNKNOWN = "UNKNOWN"
 
 class RankAnalyzer:
     def __init__(self):
@@ -27,7 +28,9 @@ class RankAnalyzer:
             'B': CardCondition.VERY_GOOD,
             'C': CardCondition.GOOD,
             'D': CardCondition.LIGHT_PLAYED,
-            'E': CardCondition.PLAYED
+            'E': CardCondition.PLAYED,
+            'F': CardCondition.HEAVILY_PLAYED,
+            'G': CardCondition.DAMAGED
         }
         
         # Common Japanese condition descriptions
@@ -62,9 +65,12 @@ class RankAnalyzer:
                 "傷あり", "汚れあり", "折れあり", "破れあり",
                 "使用感強め", "経年変化強め"
             ],
-            CardCondition.POOR: [
-                "傷みあり", "破損あり", "状態悪い",
-                "大きな傷", "大きな汚れ", "大きな折れ", "大きな破れ"
+            CardCondition.HEAVILY_PLAYED: [
+                "使用感強め", "経年変化強め", "使用感強い", "経年変化強い"
+            ],
+            CardCondition.DAMAGED: [
+                "大きな傷", "大きな汚れ", "大きな折れ", "大きな破れ",
+                "破損あり", "状態悪い"
             ]
         }
         
@@ -168,5 +174,6 @@ class RankAnalyzer:
         return condition in [
             CardCondition.MINT,
             CardCondition.NEAR_MINT,
-            CardCondition.EXCELLENT
+            CardCondition.EXCELLENT,
+            CardCondition.VERY_GOOD
         ] 

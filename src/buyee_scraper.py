@@ -19,10 +19,10 @@ from card_analyzer2 import CardAnalyzer, CardInfo
 logger = logging.getLogger(__name__)
 
 class BuyeeScraper:
-    def __init__(self, headless: bool = True):
+    def __init__(self, headless: bool = True, use_llm: bool = False):
         self.setup_logging()
         self.setup_driver(headless)
-        self.card_analyzer = CardAnalyzer()
+        self.card_analyzer = CardAnalyzer(use_llm=use_llm)
         # self.rank_analyzer = RankAnalyzer()  # Commented out - module not available
         # self.text_analyzer = TextAnalyzer()  # Commented out - module not available
         # self.image_analyzer = ImageAnalyzer()  # Commented out - module not available

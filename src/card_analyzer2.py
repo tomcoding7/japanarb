@@ -39,9 +39,27 @@ class CardInfo:
     recommendation: Optional[str] = None
 
 class CardAnalyzer:
-    def __init__(self):
+    def __init__(self, use_llm: bool = False):
         load_dotenv()
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.use_llm = use_llm
+        
+        # Initialize OpenAI client only if LLM is enabled and API key is available
+        self.client = None
+        if self.use_llm:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key and api_key != 'your_openai_api_key_here':
+                try:
+                    self.client = OpenAI(api_key=api_key)
+                    logger.info("LLM analysis enabled - OpenAI client initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize OpenAI client: {str(e)}")
+                    self.use_llm = False
+            else:
+                logger.warning("LLM analysis disabled - No valid OpenAI API key found")
+                self.use_llm = False
+        
+        if not self.use_llm:
+            logger.info("Using rule-based analysis only (LLM disabled)")
         
         # Valuable card names (both Japanese and English)
         self.valuable_card_names = [
@@ -169,86 +187,87 @@ class CardAnalyzer:
                 card_info.matched_keywords.extend(valuable_set_matches)
             
             # 2. AI Analysis
-            try:
-                # Prepare analysis prompt
-                analysis_prompt = f"""
-                Analyze this Yu-Gi-Oh! card listing:
-                Title: {title}
-                Description: {description}
-                Current Price: ¥{price}
-                
-                Please provide a detailed analysis including:
-                1. Card identification (name, set, number if visible)
-                2. Condition assessment
-                3. Authenticity check
-                4. Value assessment based on recent eBay sales
-                5. Profit potential analysis
-                6. Recommendation (Buy/Pass)
-                
-                Format your response as JSON with these keys:
-                {{
-                    "card_name": "string",
-                    "set_code": "string",
-                    "card_number": "string",
-                    "condition": "string",
-                    "authenticity": "string",
-                    "value_assessment": {{
-                        "min_value": float,
-                        "max_value": float,
-                        "confidence": float
-                    }},
-                    "profit_potential": {{
-                        "estimated_profit": float,
-                        "risk_level": "string",
-                        "confidence": float
-                    }},
-                    "recommendation": {{
-                        "action": "string",
-                        "reasoning": "string",
-                        "confidence": float
+            if self.use_llm:
+                try:
+                    # Prepare analysis prompt
+                    analysis_prompt = f"""
+                    Analyze this Yu-Gi-Oh! card listing:
+                    Title: {title}
+                    Description: {description}
+                    Current Price: ¥{price}
+                    
+                    Please provide a detailed analysis including:
+                    1. Card identification (name, set, number if visible)
+                    2. Condition assessment
+                    3. Authenticity check
+                    4. Value assessment based on recent eBay sales
+                    5. Profit potential analysis
+                    6. Recommendation (Buy/Pass)
+                    
+                    Format your response as JSON with these keys:
+                    {{
+                        "card_name": "string",
+                        "set_code": "string",
+                        "card_number": "string",
+                        "condition": "string",
+                        "authenticity": "string",
+                        "value_assessment": {{
+                            "min_value": float,
+                            "max_value": float,
+                            "confidence": float
+                        }},
+                        "profit_potential": {{
+                            "estimated_profit": float,
+                            "risk_level": "string",
+                            "confidence": float
+                        }},
+                        "recommendation": {{
+                            "action": "string",
+                            "reasoning": "string",
+                            "confidence": float
+                        }}
                     }}
-                }}
-                """
-                
-                # Call OpenAI API
-                response = self.client.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an expert Yu-Gi-Oh! card evaluator with deep knowledge of card values, conditions, and market trends."
-                        },
-                        {
-                            "role": "user",
-                            "content": analysis_prompt
+                    """
+                    
+                    # Call OpenAI API
+                    response = self.client.chat.completions.create(
+                        model="gpt-4-turbo",
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are an expert Yu-Gi-Oh! card evaluator with deep knowledge of card values, conditions, and market trends."
+                            },
+                            {
+                                "role": "user",
+                                "content": analysis_prompt
+                            }
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    # Parse AI response
+                    ai_analysis = json.loads(response.choices[0].message.content)
+                    card_info.ai_analysis = ai_analysis
+                    
+                    # Update card info based on AI analysis
+                    if 'value_assessment' in ai_analysis:
+                        card_info.estimated_value = {
+                            'min': ai_analysis['value_assessment']['min_value'],
+                            'max': ai_analysis['value_assessment']['max_value']
                         }
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                
-                # Parse AI response
-                ai_analysis = json.loads(response.choices[0].message.content)
-                card_info.ai_analysis = ai_analysis
-                
-                # Update card info based on AI analysis
-                if 'value_assessment' in ai_analysis:
-                    card_info.estimated_value = {
-                        'min': ai_analysis['value_assessment']['min_value'],
-                        'max': ai_analysis['value_assessment']['max_value']
-                    }
-                
-                if 'profit_potential' in ai_analysis:
-                    card_info.profit_potential = ai_analysis['profit_potential']['estimated_profit']
-                
-                if 'recommendation' in ai_analysis:
-                    card_info.recommendation = f"{ai_analysis['recommendation']['action']}: {ai_analysis['recommendation']['reasoning']}"
-                
-                # Update confidence score
-                if 'value_assessment' in ai_analysis and 'confidence' in ai_analysis['value_assessment']:
-                    card_info.confidence_score = ai_analysis['value_assessment']['confidence']
-                
-            except Exception as e:
-                logger.error(f"Error in AI analysis: {str(e)}")
+                    
+                    if 'profit_potential' in ai_analysis:
+                        card_info.profit_potential = ai_analysis['profit_potential']['estimated_profit']
+                    
+                    if 'recommendation' in ai_analysis:
+                        card_info.recommendation = f"{ai_analysis['recommendation']['action']}: {ai_analysis['recommendation']['reasoning']}"
+                    
+                    # Update confidence score
+                    if 'value_assessment' in ai_analysis and 'confidence' in ai_analysis['value_assessment']:
+                        card_info.confidence_score = ai_analysis['value_assessment']['confidence']
+                    
+                except Exception as e:
+                    logger.error(f"Error in AI analysis: {str(e)}")
             
             # 3. Combine Rule-Based and AI Analysis
             # If we have both valuable name and set/promo matches, boost confidence
