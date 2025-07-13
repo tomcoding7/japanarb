@@ -51,7 +51,7 @@ if not api_key:
     sys.exit(1)
 
 class BuyeeScraper:
-    def __init__(self, output_dir: str = "scraped_results", max_pages: int = 5, headless: bool = True):
+    def __init__(self, output_dir: str = "scraped_results", max_pages: int = 5, headless: bool = True, use_llm: bool = False):
         """
         Initialize the BuyeeScraper with configuration options.
         
@@ -59,14 +59,16 @@ class BuyeeScraper:
             output_dir (str): Directory to save scraped data
             max_pages (int): Maximum number of pages to scrape per search
             headless (bool): Run Chrome in headless mode
+            use_llm (bool): Enable LLM analysis (requires OpenAI API key)
         """
         self.base_url = "https://buyee.jp"
         self.output_dir = output_dir
         self.max_pages = max_pages
         self.headless = headless
+        self.use_llm = use_llm
         self.driver = None
         self.request_handler = RequestHandler()
-        self.card_analyzer = CardAnalyzer()
+        self.card_analyzer = CardAnalyzer(use_llm=use_llm)
         self.rank_analyzer = RankAnalyzer()
         
         os.makedirs(self.output_dir, exist_ok=True)
@@ -1522,7 +1524,10 @@ class BuyeeScraper:
             'edition': None,
             'language': None,
             'rank': None,
-            'condition_text': None
+            'condition_text': None,
+            'is_valuable': False,
+            'confidence_score': 0.0,
+            'matched_keywords': []
         }
         
         try:
@@ -1600,7 +1605,83 @@ class BuyeeScraper:
             # For now, we'll just use the title as the name
             details['name'] = title.strip()
             
-            logger.info(f"Successfully parsed card details from Buyee listing")
+            # NOW ADD VALUE ANALYSIS
+            title_lower = title.lower()
+            description_lower = description.lower() if description else ""
+            
+            # Valuable card names (both Japanese and English)
+            valuable_card_names = [
+                'デーモンの召喚', 'Summoned Skull',
+                'ブルーアイズ', 'Blue-Eyes', 'ブラックマジシャン', 'Dark Magician',
+                '真紅眼の黒竜', 'Red-Eyes Black Dragon',
+                '青眼の白龍', 'Blue-Eyes White Dragon',
+                'ブラック・マジシャン', 'Dark Magician',
+                '混沌の黒魔術師', 'Dark Magician of Chaos',
+                'サイバー・ドラゴン', 'Cyber Dragon',
+                'E・HERO ネオス', 'Elemental HERO Neos',
+                'スターダスト・ドラゴン', 'Stardust Dragon',
+                'ブラック・ローズ・ドラゴン', 'Black Rose Dragon',
+                'マジシャンズ・ヴァルキリア', 'Magician\'s Valkyria',
+                'チョコレート・マジシャン・ガール', 'Chocolate Magician Girl',
+                '青き眼の乙女', 'Maiden with Eyes of Blue',
+                'ドラゴン・ナイト・ガイア', 'Dragon Knight Gaia'
+            ]
+            
+            # Valuable sets, promos, and editions
+            valuable_sets_and_promos = [
+                'DMG', 'DM1', 'GB', 'GB特典', '初期版', 'AYUJ-JPN', 'お買い上げ特典', 'プロモ', 'promo', '限定',
+                'LOB', 'SDK', 'SRL', 'PSV', 'MRL', 'MRD', 'SKE', 'SDJ', 'SDY', 'SDK',
+                '1st', 'first edition', '初版', '初刷', 'limited edition', '限定版',
+                'game boy', 'GB', 'DMG', 'DM1', 'DM2', 'DM3', 'DM4', 'DM5',
+                'tournament pack', 'TP', 'championship', 'champion', 'champions',
+                'shonen jump', 'SJ', 'jump', 'vjump', 'v-jump', 'vj', 'v-j',
+                'duelist league', 'DL', 'duelist', 'league',
+                'world championship', 'WC', 'world', 'championship',
+                'promotional', 'promo', 'promotional card', 'promotional pack',
+                'special edition', 'special pack', 'special set',
+                'collector\'s tin', 'collector\'s box', 'collector\'s pack',
+                'anniversary', 'anniversary pack', 'anniversary box',
+                'premium pack', 'premium box', 'premium tin',
+                'gold series', 'gold', 'gold pack', 'gold box',
+                'platinum', 'platinum pack', 'platinum box',
+                'secret', 'secret rare', 'ultimate', 'ultimate rare',
+                'ghost', 'ghost rare', 'starlight', 'starlight rare',
+                'quarter century', 'qcsr', 'prismatic', 'prismatic secret'
+            ]
+            
+            # Check for valuable card names
+            valuable_name_matches = [name for name in valuable_card_names if name.lower() in title_lower or name.lower() in description_lower]
+            if valuable_name_matches:
+                details['matched_keywords'].extend(valuable_name_matches)
+                logger.info(f"Found valuable card name matches: {valuable_name_matches}")
+            
+            # Check for valuable sets/promos
+            valuable_set_matches = [term for term in valuable_sets_and_promos if term.lower() in title_lower or term.lower() in description_lower]
+            if valuable_set_matches:
+                details['matched_keywords'].extend(valuable_set_matches)
+                logger.info(f"Found valuable set/promo matches: {valuable_set_matches}")
+            
+            # Determine if valuable and confidence score
+            if valuable_name_matches and valuable_set_matches:
+                details['is_valuable'] = True
+                details['confidence_score'] = 0.8  # High confidence if both present
+                logger.info(f"Card marked as valuable with high confidence: {title}")
+            elif valuable_name_matches or valuable_set_matches:
+                details['is_valuable'] = True
+                details['confidence_score'] = 0.6  # Medium confidence if one present
+                logger.info(f"Card marked as valuable with medium confidence: {title}")
+            
+            # Boost confidence for high-value rarities
+            if details['rarity'] in ['Secret Rare', 'Ultimate Rare', 'Ghost Rare', 'Collector\'s Rare', 'Starlight Rare']:
+                details['confidence_score'] = min(1.0, details['confidence_score'] + 0.2)
+                logger.info(f"Boosted confidence for high-value rarity: {details['rarity']}")
+            
+            # Boost confidence for 1st editions
+            if details['edition'] == '1st Edition':
+                details['confidence_score'] = min(1.0, details['confidence_score'] + 0.1)
+                logger.info("Boosted confidence for 1st edition")
+            
+            logger.info(f"Successfully parsed card details from Buyee listing - Valuable: {details['is_valuable']}, Confidence: {details['confidence_score']}")
             return details
             
         except Exception as e:
@@ -1736,6 +1817,7 @@ def main():
     parser.add_argument('--output-dir', default='scraped_results', help='Directory to save results')
     parser.add_argument('--max-pages', type=int, default=5, help='Maximum pages to scrape per search')
     parser.add_argument('--headless', action='store_true', help='Run in headless mode')
+    parser.add_argument('--use-llm', action='store_true', help='Enable LLM analysis (requires OpenAI API key)')
     args = parser.parse_args()
     
     scraper = None
@@ -1743,7 +1825,8 @@ def main():
         scraper = BuyeeScraper(
             output_dir=args.output_dir,
             max_pages=args.max_pages,
-            headless=args.headless
+            headless=args.headless,
+            use_llm=args.use_llm
         )
         
         # Test connection first
