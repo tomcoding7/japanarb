@@ -9,11 +9,12 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from .card_analyzer2 import CardAnalyzer, CardInfo
-from .rank_analyzer import RankAnalyzer
-from .text_analyzer import TextAnalyzer
-from .image_analyzer import ImageAnalyzer
-from .deal_analyzer import DealAnalyzer
+from card_analyzer2 import CardAnalyzer, CardInfo
+# Note: These modules need to be available in the root directory
+# from rank_analyzer import RankAnalyzer
+# from text_analyzer import TextAnalyzer
+# from image_analyzer import ImageAnalyzer
+# from deal_analyzer import DealAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class BuyeeScraper:
         self.setup_logging()
         self.setup_driver(headless)
         self.card_analyzer = CardAnalyzer()
-        self.rank_analyzer = RankAnalyzer()
-        self.text_analyzer = TextAnalyzer()
-        self.image_analyzer = ImageAnalyzer()
-        self.deal_analyzer = DealAnalyzer()
+        # self.rank_analyzer = RankAnalyzer()  # Commented out - module not available
+        # self.text_analyzer = TextAnalyzer()  # Commented out - module not available
+        # self.image_analyzer = ImageAnalyzer()  # Commented out - module not available
+        # self.deal_analyzer = DealAnalyzer()  # Commented out - module not available
         self.setup_directories()
         
     def setup_logging(self):
