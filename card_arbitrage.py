@@ -15,12 +15,17 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium_stealth import stealth
 import requests
 from bs4 import BeautifulSoup
-from googletrans import Translator
+# Translation functionality removed - not critical for core functionality
 from dotenv import load_dotenv
 import re
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+import statistics
+from urllib.parse import quote
+
+# Import our existing utilities
+from scraper_utils import PriceAnalyzer, CardInfoExtractor
 
 # Set up logging
 logging.basicConfig(
@@ -51,57 +56,69 @@ class CardListing:
     card_id: Optional[str] = None
     set_code: Optional[str] = None
     ebay_prices: Optional[Dict[str, List[Decimal]]] = None
+    point130_prices: Optional[Dict[str, Any]] = None
     potential_profit: Optional[Decimal] = None
     profit_margin: Optional[float] = None
+    arbitrage_score: Optional[float] = None
+    recommended_action: Optional[str] = None
+    screening_score: Optional[int] = None
+    screening_reasons: Optional[List[str]] = None
 
 class CardArbitrageTool:
+    """Enhanced arbitrage tool that combines Buyee, eBay, and 130point.com data."""
+
     def __init__(self, output_dir: str = "arbitrage_results"):
-        """Initialize the arbitrage tool."""
         self.output_dir = output_dir
-        self.driver = None
-        self.translator = Translator()
-        self.setup_driver()
         os.makedirs(output_dir, exist_ok=True)
         
+        # Initialize analyzers
+        self.price_analyzer = PriceAnalyzer()
+        self.card_extractor = CardInfoExtractor()
+        
+        # Setup webdriver
+        self.driver = None
+        self.setup_driver()
+        
+        # Initialize translator
+        # Translation removed for simplicity
+        
+        # Exchange rate (should be updated regularly)
+        self.yen_to_usd = Decimal('0.0067')
+        
+        # Arbitrage thresholds
+        self.min_profit_margin = 30.0  # Minimum 30% profit margin
+        self.min_profit_usd = 50.0     # Minimum $50 profit
+        self.max_risk_score = 0.7      # Maximum risk score (0-1)
+
     def setup_driver(self):
-        """Set up Chrome WebDriver with stealth mode."""
+        """Setup Chrome driver for Buyee scraping."""
         try:
-            chrome_options = Options()
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            options = Options()
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_argument('--disable-extensions')
+            options.add_argument('--disable-plugins')
+            options.add_argument('--disable-images')
+            options.add_argument('--disable-javascript')
+            options.add_argument('--headless')  # Run in background
+            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
             
+            # Use regular Chrome driver
             service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            stealth(
-                self.driver,
-                languages=["ja-JP", "ja"],
-                vendor="Google Inc.",
-                platform="Win32",
-                webgl_vendor="Intel Inc.",
-                renderer="Intel Iris OpenGL Engine",
-                fix_hairline=True,
-            )
-            
-            logger.info("WebDriver initialized successfully")
+            self.driver = webdriver.Chrome(service=service, options=options)
+            logger.info("Chrome WebDriver setup complete for Buyee scraping")
             
         except Exception as e:
-            logger.error(f"Failed to setup WebDriver: {str(e)}")
-            raise
+            logger.error(f"Error setting up WebDriver: {str(e)}")
+            self.driver = None
+            logger.warning("WebDriver setup failed - scraping will not work")
 
     def translate_text(self, text: str) -> str:
-        """Translate Japanese text to English."""
-        try:
-            if not text:
-                return ""
-            result = self.translator.translate(text, src='ja', dest='en')
-            return result.text
-        except Exception as e:
-            logger.error(f"Translation error: {str(e)}")
-            return text
+        """Simple text translation - returns original text for now."""
+        # For now, just return the original text
+        # Translation can be added later if needed
+        return text
 
     def extract_card_id(self, title: str) -> Optional[str]:
         """Extract card ID from title."""
@@ -119,17 +136,21 @@ class CardArbitrageTool:
                 return match.group(1)
         return None
 
-    def get_ebay_prices(self, card_id: str) -> Dict[str, List[Decimal]]:
+    def get_ebay_prices(self, card_name: str, set_code: Optional[str] = None) -> Dict[str, List[Decimal]]:
         """Get eBay sold prices for a card."""
         try:
+            # Construct search term
+            search_term = f"{card_name} {set_code}" if set_code else card_name
+            search_term = quote(search_term)
+            
             # Construct eBay search URL
-            search_url = f"https://www.ebay.com/sch/i.html?_nkw={card_id}&_sacat=0&LH_Sold=1&LH_Complete=1"
+            search_url = f"https://www.ebay.com/sch/i.html?_nkw={search_term}&_sacat=0&LH_Sold=1&LH_Complete=1"
             
             # Make request with headers
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            response = requests.get(search_url, headers=headers)
+            response = requests.get(search_url, headers=headers, timeout=10)
             
             if response.status_code != 200:
                 logger.error(f"Failed to fetch eBay data: {response.status_code}")
@@ -168,30 +189,226 @@ class CardArbitrageTool:
             logger.error(f"Error fetching eBay prices: {str(e)}")
             return {'raw': [], 'psa': []}
 
-    def calculate_profit(self, price_yen: Decimal, ebay_prices: Dict[str, List[Decimal]]) -> tuple:
-        """Calculate potential profit and margin."""
+    def get_130point_prices(self, card_name: str, set_code: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get price data from 130point.com."""
         try:
-            # Convert yen to USD (using a simple rate, should be updated regularly)
-            yen_to_usd = Decimal('0.0067')  # Update this rate regularly
-            price_usd = price_yen * yen_to_usd
-            
+            return self.price_analyzer.get_130point_prices(card_name, set_code)
+        except Exception as e:
+            logger.error(f"Error getting 130point prices: {str(e)}")
+            return None
+
+    def calculate_arbitrage_score(self, buyee_price_usd: Decimal, ebay_prices: Dict[str, List[Decimal]], 
+                                point130_prices: Optional[Dict[str, Any]], condition: str) -> tuple:
+        """Calculate comprehensive arbitrage score and profit potential."""
+        try:
             # Calculate average eBay prices
-            avg_raw = sum(ebay_prices['raw']) / len(ebay_prices['raw']) if ebay_prices['raw'] else Decimal('0')
-            avg_psa = sum(ebay_prices['psa']) / len(ebay_prices['psa']) if ebay_prices['psa'] else Decimal('0')
+            avg_raw_ebay = statistics.mean(ebay_prices['raw']) if ebay_prices['raw'] else 0
+            avg_psa_ebay = statistics.mean(ebay_prices['psa']) if ebay_prices['psa'] else 0
             
-            # Use the higher average price
-            target_price = max(avg_raw, avg_psa)
+            # Get 130point prices
+            avg_raw_130 = point130_prices.get('raw_avg', 0) if point130_prices else 0
+            avg_psa_9_130 = point130_prices.get('psa_9_avg', 0) if point130_prices else 0
+            avg_psa_10_130 = point130_prices.get('psa_10_avg', 0) if point130_prices else 0
             
-            # Calculate profit (assuming 15% eBay fees and 5% shipping)
-            fees = target_price * Decimal('0.20')
-            profit = target_price - price_usd - fees
-            margin = (profit / price_usd) * 100 if price_usd > 0 else 0
+            # Determine target price based on condition
+            target_price = 0
+            condition_multiplier = 1.0
             
-            return profit, margin
+            # Adjust for condition
+            if 'new' in condition.lower() or 'mint' in condition.lower():
+                condition_multiplier = 1.0
+            elif 'used' in condition.lower() or 'played' in condition.lower():
+                condition_multiplier = 0.8
+            elif 'damaged' in condition.lower():
+                condition_multiplier = 0.6
+            
+            # Use the best available price data
+            if avg_psa_10_130 > 0:
+                target_price = avg_psa_10_130
+            elif avg_psa_9_130 > 0:
+                target_price = avg_psa_9_130
+            elif avg_raw_130 > 0:
+                target_price = avg_raw_130
+            elif avg_psa_ebay > 0:
+                target_price = avg_psa_ebay
+            elif avg_raw_ebay > 0:
+                target_price = avg_raw_ebay
+            else:
+                # No price data available
+                return Decimal('0'), 0.0, 0.0, "No price data available"
+            
+            # Apply condition multiplier
+            target_price *= condition_multiplier
+            
+            # Calculate fees and costs
+            ebay_fees = target_price * Decimal('0.15')  # 15% eBay fees
+            shipping_cost = Decimal('5.0')  # Estimated shipping
+            total_costs = ebay_fees + shipping_cost
+            
+            # Calculate profit
+            profit = target_price - buyee_price_usd - total_costs
+            margin = (profit / buyee_price_usd) * 100 if buyee_price_usd > 0 else 0
+            
+            # Calculate arbitrage score (0-100)
+            score = 0.0
+            
+            # Profit margin component (40% weight)
+            if margin >= 50:
+                score += 40
+            elif margin >= 30:
+                score += 30
+            elif margin >= 20:
+                score += 20
+            elif margin >= 10:
+                score += 10
+            
+            # Absolute profit component (30% weight)
+            if profit >= 100:
+                score += 30
+            elif profit >= 50:
+                score += 20
+            elif profit >= 25:
+                score += 10
+            
+            # Data reliability component (20% weight)
+            data_sources = 0
+            if ebay_prices['raw'] or ebay_prices['psa']:
+                data_sources += 1
+            if point130_prices:
+                data_sources += 1
+            
+            if data_sources >= 2:
+                score += 20
+            elif data_sources == 1:
+                score += 10
+            
+            # Risk assessment component (10% weight)
+            risk_score = 0
+            if margin < 0:
+                risk_score = 10  # High risk
+            elif margin < 10:
+                risk_score = 5   # Medium risk
+            else:
+                risk_score = 0   # Low risk
+            
+            score += (10 - risk_score)
+            
+            # Determine recommended action
+            if score >= 70 and margin >= 30 and profit >= 50:
+                action = "STRONG BUY"
+            elif score >= 50 and margin >= 20 and profit >= 25:
+                action = "BUY"
+            elif score >= 30 and margin >= 10 and profit >= 10:
+                action = "CONSIDER"
+            else:
+                action = "PASS"
+            
+            return profit, margin, score, action
             
         except Exception as e:
-            logger.error(f"Error calculating profit: {str(e)}")
-            return Decimal('0'), 0.0
+            logger.error(f"Error calculating arbitrage score: {str(e)}")
+            return Decimal('0'), 0.0, 0.0, "Error in calculation"
+
+    def pre_screen_listings(self, listings: List[CardListing]) -> List[CardListing]:
+        """Pre-screen listings to identify promising candidates for detailed analysis."""
+        promising_listings = []
+        
+        for listing in listings:
+            try:
+                # Quick screening criteria (like human intuition)
+                score = 0
+                reasons = []
+                
+                # 1. Price screening (40% weight)
+                price_usd = listing.price_usd
+                if price_usd < 5:  # Too cheap, likely junk
+                    score -= 20
+                    reasons.append("Too cheap (<$5)")
+                elif price_usd > 1000:  # Too expensive, high risk
+                    score -= 15
+                    reasons.append("Too expensive (>$1000)")
+                elif 10 <= price_usd <= 200:  # Sweet spot
+                    score += 20
+                    reasons.append("Good price range ($10-$200)")
+                
+                # 2. Title quality screening (30% weight)
+                title = listing.title.lower()
+                title_en = listing.title_en.lower()
+                
+                # Check for valuable keywords
+                valuable_keywords = [
+                    'blue-eyes', 'blue eyes', '青眼', 'dark magician', 'ブラック・マジシャン',
+                    'red-eyes', 'red eyes', 'レッドアイズ', 'lob', 'mfc', 'psv',
+                    '1st', 'first', '初版', 'ultra', 'secret', 'シークレット',
+                    'mint', 'new', '新品', 'unused', '未使用'
+                ]
+                
+                keyword_matches = 0
+                for keyword in valuable_keywords:
+                    if keyword in title or keyword in title_en:
+                        keyword_matches += 1
+                
+                if keyword_matches >= 2:
+                    score += 15
+                    reasons.append(f"Valuable keywords found ({keyword_matches})")
+                elif keyword_matches == 1:
+                    score += 8
+                    reasons.append("Some valuable keywords")
+                else:
+                    score -= 10
+                    reasons.append("No valuable keywords")
+                
+                # 3. Condition screening (20% weight)
+                condition = listing.condition.lower()
+                if any(word in condition for word in ['new', 'mint', '新品', '未使用']):
+                    score += 10
+                    reasons.append("Good condition")
+                elif any(word in condition for word in ['used', '中古', '使用済み']):
+                    score += 5
+                    reasons.append("Used but acceptable")
+                elif any(word in condition for word in ['damaged', 'damage', '傷', '破損']):
+                    score -= 15
+                    reasons.append("Damaged condition")
+                
+                # 4. Set code screening (10% weight)
+                if listing.set_code:
+                    # Check for valuable sets
+                    valuable_sets = ['LOB', 'MFC', 'PSV', 'MRD', 'SRL', 'LON']
+                    if any(set_code in listing.set_code.upper() for set_code in valuable_sets):
+                        score += 10
+                        reasons.append("Valuable set code")
+                    else:
+                        score += 2
+                        reasons.append("Has set code")
+                else:
+                    score -= 5
+                    reasons.append("No set code")
+                
+                # 5. Image quality check (if available)
+                if listing.image_url and 'placeholder' not in listing.image_url.lower():
+                    score += 5
+                    reasons.append("Has real image")
+                else:
+                    score -= 5
+                    reasons.append("No real image")
+                
+                # Determine if listing is promising
+                listing.screening_score = score
+                listing.screening_reasons = reasons
+                
+                # Only proceed with detailed analysis if score is above threshold
+                if score >= 15:  # Minimum threshold for detailed analysis
+                    promising_listings.append(listing)
+                    logger.info(f"PROMISING: {listing.title_en} (Score: {score}) - {', '.join(reasons)}")
+                else:
+                    logger.debug(f"SKIPPED: {listing.title_en} (Score: {score}) - {', '.join(reasons)}")
+                
+            except Exception as e:
+                logger.error(f"Error pre-screening listing: {str(e)}")
+                continue
+        
+        logger.info(f"Pre-screening complete: {len(promising_listings)}/{len(listings)} listings selected for detailed analysis")
+        return promising_listings
 
     def scrape_buyee_listings(self, keyword: str, max_results: int = 20) -> List[CardListing]:
         """Scrape card listings from Buyee."""
@@ -227,21 +444,22 @@ class CardArbitrageTool:
                     # Translate title
                     title_en = self.translate_text(title)
                     
-                    # Extract card ID
-                    card_id = self.extract_card_id(title)
+                    # Extract card info
+                    card_name, set_code = self.card_extractor.extract_card_info(title)
                     
                     # Create listing object
                     listing = CardListing(
                         title=title,
                         title_en=title_en,
                         price_yen=price_yen,
-                        price_usd=price_yen * Decimal('0.0067'),  # Convert to USD
+                        price_usd=price_yen * self.yen_to_usd,
                         condition=condition,
                         image_url=image_url,
                         listing_url=listing_url,
                         description="",  # Will be filled later
                         description_en="",  # Will be filled later
-                        card_id=card_id
+                        card_id=card_name,
+                        set_code=set_code
                     )
                     
                     listings.append(listing)
@@ -260,19 +478,33 @@ class CardArbitrageTool:
         """Analyze listings and calculate potential profits."""
         analyzed_listings = []
         
-        for listing in listings:
+        for i, listing in enumerate(listings, 1):
             try:
+                logger.info(f"Analyzing listing {i}/{len(listings)}: {listing.title_en}")
+                
                 if listing.card_id:
                     # Get eBay prices
-                    ebay_prices = self.get_ebay_prices(listing.card_id)
+                    ebay_prices = self.get_ebay_prices(listing.card_id, listing.set_code)
                     listing.ebay_prices = ebay_prices
                     
-                    # Calculate profit
-                    profit, margin = self.calculate_profit(listing.price_yen, ebay_prices)
+                    # Get 130point prices
+                    point130_prices = self.get_130point_prices(listing.card_id, listing.set_code)
+                    listing.point130_prices = point130_prices
+                    
+                    # Calculate arbitrage score
+                    profit, margin, score, action = self.calculate_arbitrage_score(
+                        listing.price_usd, ebay_prices, point130_prices, listing.condition
+                    )
+                    
                     listing.potential_profit = profit
                     listing.profit_margin = margin
+                    listing.arbitrage_score = score
+                    listing.recommended_action = action
                 
                 analyzed_listings.append(listing)
+                
+                # Add delay to avoid rate limiting
+                time.sleep(2)
                 
             except Exception as e:
                 logger.error(f"Error analyzing listing: {str(e)}")
@@ -297,13 +529,24 @@ class CardArbitrageTool:
                     'image_url': listing.image_url,
                     'listing_url': listing.listing_url,
                     'card_id': listing.card_id,
+                    'set_code': listing.set_code,
                     'ebay_raw_prices': [float(p) for p in listing.ebay_prices['raw']] if listing.ebay_prices else [],
                     'ebay_psa_prices': [float(p) for p in listing.ebay_prices['psa']] if listing.ebay_prices else [],
+                    'point130_raw_avg': listing.point130_prices.get('raw_avg') if listing.point130_prices else None,
+                    'point130_psa9_avg': listing.point130_prices.get('psa_9_avg') if listing.point130_prices else None,
+                    'point130_psa10_avg': listing.point130_prices.get('psa_10_avg') if listing.point130_prices else None,
                     'potential_profit': float(listing.potential_profit) if listing.potential_profit else None,
-                    'profit_margin': listing.profit_margin
+                    'profit_margin': listing.profit_margin,
+                    'arbitrage_score': listing.arbitrage_score,
+                    'recommended_action': listing.recommended_action,
+                    'screening_score': listing.screening_score,
+                    'screening_reasons': listing.screening_reasons
                 })
             
             df = pd.DataFrame(data)
+            
+            # Sort by arbitrage score (highest first)
+            df = df.sort_values('arbitrage_score', ascending=False)
             
             # Save as CSV
             csv_path = os.path.join(self.output_dir, f"arbitrage_{keyword}_{timestamp}.csv")
@@ -316,26 +559,110 @@ class CardArbitrageTool:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             logger.info(f"Saved results to {json_path}")
             
+            # Print summary
+            self.print_summary(df)
+            
         except Exception as e:
             logger.error(f"Error saving results: {str(e)}")
 
+    def print_summary(self, df: pd.DataFrame):
+        """Print a summary of the arbitrage analysis."""
+        print("\n" + "="*60)
+        print("ARBITRAGE ANALYSIS SUMMARY")
+        print("="*60)
+        
+        total_listings = len(df)
+        profitable_listings = len(df[df['profit_margin'] > 0])
+        strong_buys = len(df[df['recommended_action'] == 'STRONG BUY'])
+        buys = len(df[df['recommended_action'] == 'BUY'])
+        considers = len(df[df['recommended_action'] == 'CONSIDER'])
+        
+        print(f"Total listings analyzed: {total_listings}")
+        print(f"Profitable opportunities: {profitable_listings}")
+        print(f"Strong Buy recommendations: {strong_buys}")
+        print(f"Buy recommendations: {buys}")
+        print(f"Consider recommendations: {considers}")
+        
+        if not df.empty:
+            avg_score = df['arbitrage_score'].mean()
+            avg_margin = df['profit_margin'].mean()
+            max_profit = df['potential_profit'].max()
+            avg_screening = df['screening_score'].mean() if 'screening_score' in df.columns else 0
+            
+            print(f"\nAverage arbitrage score: {avg_score:.1f}/100")
+            print(f"Average profit margin: {avg_margin:.1f}%")
+            print(f"Maximum potential profit: ${max_profit:.2f}")
+            print(f"Average screening score: {avg_screening:.1f}")
+            
+            # Show top opportunities
+            top_opportunities = df[df['recommended_action'].isin(['STRONG BUY', 'BUY'])].head(5)
+            if not top_opportunities.empty:
+                print(f"\nTOP OPPORTUNITIES:")
+                print("-" * 60)
+                for _, row in top_opportunities.iterrows():
+                    print(f"• {row['title_en']}")
+                    print(f"  Price: ¥{row['price_yen']:,} (${row['price_usd']:.2f})")
+                    print(f"  Profit: ${row['potential_profit']:.2f} ({row['profit_margin']:.1f}%)")
+                    print(f"  Score: {row['arbitrage_score']:.1f}/100 - {row['recommended_action']}")
+                    if 'screening_reasons' in row and row['screening_reasons']:
+                        print(f"  Screening: {', '.join(row['screening_reasons'])}")
+                    print()
+
     def run(self, keyword: str, max_results: int = 20):
-        """Run the arbitrage analysis."""
+        """Run the complete arbitrage analysis."""
         try:
             logger.info(f"Starting arbitrage analysis for: {keyword}")
             
-            # Scrape listings
+            # Scrape Buyee listings
             listings = self.scrape_buyee_listings(keyword, max_results)
             logger.info(f"Found {len(listings)} listings")
             
-            # Analyze listings
-            analyzed_listings = self.analyze_listings(listings)
-            logger.info(f"Analyzed {len(analyzed_listings)} listings")
+            if not listings:
+                logger.warning("No listings found")
+                return []
+            
+            # Pre-screen listings (like human intuition)
+            promising_listings = self.pre_screen_listings(listings)
+            
+            if not promising_listings:
+                logger.warning("No promising listings found after pre-screening")
+                return []
+            
+            # Analyze only promising listings
+            analyzed_listings = self.analyze_listings(promising_listings)
+            
+            # Convert to dictionary format for web interface
+            results = []
+            for listing in analyzed_listings:
+                results.append({
+                    'title': listing.title,
+                    'title_en': listing.title_en,
+                    'price_yen': int(listing.price_yen),
+                    'price_usd': float(listing.price_usd),
+                    'condition': listing.condition,
+                    'image_url': listing.image_url,
+                    'listing_url': listing.listing_url,
+                    'description': listing.description,
+                    'description_en': listing.description_en,
+                    'card_id': listing.card_id,
+                    'set_code': listing.set_code,
+                    'ebay_prices': listing.ebay_prices,
+                    'point130_prices': listing.point130_prices,
+                    'potential_profit': float(listing.potential_profit) if listing.potential_profit else 0,
+                    'profit_margin': listing.profit_margin or 0,
+                    'arbitrage_score': listing.arbitrage_score or 0,
+                    'recommended_action': listing.recommended_action or 'PASS',
+                    'screening_score': listing.screening_score or 0,
+                    'screening_reasons': listing.screening_reasons or [],
+                    'ebay_avg_price': 0,  # Would be calculated from real data
+                    'search_term': keyword
+                })
             
             # Save results
             self.save_results(analyzed_listings, keyword)
             
-            return analyzed_listings
+            logger.info("Arbitrage analysis complete")
+            return results
             
         except Exception as e:
             logger.error(f"Error in arbitrage analysis: {str(e)}")
@@ -344,28 +671,27 @@ class CardArbitrageTool:
     def cleanup(self):
         """Clean up resources."""
         if self.driver:
-            try:
-                self.driver.quit()
-            except Exception as e:
-                logger.error(f"Error closing WebDriver: {str(e)}")
+            self.driver.quit()
 
 def main():
-    # Example usage
+    """Example usage of the enhanced arbitrage tool."""
     tool = CardArbitrageTool()
+    
     try:
-        results = tool.run("遊戯王 アジア", max_results=20)
+        # Example search terms
+        search_terms = [
+            "青眼の白龍",  # Blue-Eyes White Dragon
+            "ブラック・マジシャン",  # Dark Magician
+            "遊戯王 レア",  # Yu-Gi-Oh! Rare cards
+        ]
         
-        # Print summary
-        print("\nArbitrage Analysis Results:")
-        print("=" * 80)
-        for listing in sorted(results, key=lambda x: x.profit_margin if x.profit_margin else 0, reverse=True):
-            print(f"\nTitle: {listing.title_en}")
-            print(f"Price: ¥{listing.price_yen:,.0f} (${listing.price_usd:.2f})")
-            print(f"Condition: {listing.condition}")
-            print(f"Potential Profit: ${listing.potential_profit:.2f}" if listing.potential_profit else "No profit data")
-            print(f"Profit Margin: {listing.profit_margin:.1f}%" if listing.profit_margin else "No margin data")
-            print("-" * 40)
+        for term in search_terms:
+            print(f"\nAnalyzing: {term}")
+            tool.run(term, max_results=10)
+            time.sleep(5)  # Delay between searches
             
+    except KeyboardInterrupt:
+        print("\nAnalysis interrupted by user")
     finally:
         tool.cleanup()
 

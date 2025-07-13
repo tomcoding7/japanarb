@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - Yu-Gi-Oh! Arbitrage Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-listing {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card-listing:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .score-badge {
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .action-strong-buy {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        .action-buy {
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            color: white;
+        }
+        .action-consider {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        .action-pass {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+        }
+        .profit-positive {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .profit-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-dragon me-2"></i>Yu-Gi-Oh! Arbitrage Bot
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-chart-line me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/search"><i class="fas fa-search me-1"></i>Search</a>
+                <a class="nav-link active" href="/results"><i class="fas fa-list me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Statistics -->
+        <div class="row" id="stats-section">
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h4 id="total-listings">0</h4>
+                    <p>Total Listings</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h4 id="profitable-listings">0</h4>
+                    <p>Profitable</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h4 id="strong-buys">0</h4>
+                    <p>Strong Buys</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <h4 id="avg-score">0</h4>
+                    <p>Avg Score</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+            <h5><i class="fas fa-filter me-2"></i>Filters</h5>
+            <div class="row">
+                <div class="col-md-2">
+                    <label for="minScore" class="form-label">Min Score:</label>
+                    <input type="number" class="form-control" id="minScore" value="0" min="0" max="100">
+                </div>
+                <div class="col-md-2">
+                    <label for="maxPrice" class="form-label">Max Price ($):</label>
+                    <input type="number" class="form-control" id="maxPrice" placeholder="No limit">
+                </div>
+                <div class="col-md-2">
+                    <label for="minProfit" class="form-label">Min Profit (%):</label>
+                    <input type="number" class="form-control" id="minProfit" value="0">
+                </div>
+                <div class="col-md-2">
+                    <label for="actionFilter" class="form-label">Action:</label>
+                    <select class="form-select" id="actionFilter">
+                        <option value="">All Actions</option>
+                        <option value="STRONG BUY">Strong Buy</option>
+                        <option value="BUY">Buy</option>
+                        <option value="CONSIDER">Consider</option>
+                        <option value="PASS">Pass</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="searchTermFilter" class="form-label">Search Term:</label>
+                    <select class="form-select" id="searchTermFilter">
+                        <option value="">All Terms</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" onclick="applyFilters()">
+                        <i class="fas fa-search me-1"></i>Apply
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-container">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h4 class="mt-3">Loading results...</h4>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentResults = [];
+        
+        function loadResults() {
+            const minScore = document.getElementById('minScore').value;
+            const maxPrice = document.getElementById('maxPrice').value;
+            const minProfit = document.getElementById('minProfit').value;
+            const actionFilter = document.getElementById('actionFilter').value;
+            const searchTerm = document.getElementById('searchTermFilter').value;
+            
+            const params = new URLSearchParams({
+                min_score: minScore,
+                min_profit: minProfit
+            });
+            
+            if (maxPrice) params.append('max_price', maxPrice);
+            if (actionFilter) params.append('action_filter', actionFilter);
+            if (searchTerm) params.append('search_term', searchTerm);
+            
+            fetch(`/api/results?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentResults = data.results;
+                        displayResults(data.results);
+                        updateStats();
+                    } else {
+                        document.getElementById('results-container').innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.message}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('results-container').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        function displayResults(results) {
+            const container = document.getElementById('results-container');
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="no-results">
+                        <i class="fas fa-search fa-3x mb-3"></i>
+                        <h4>No results found</h4>
+                        <p>Try adjusting your filters or search for different cards.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `<div class="row">`;
+            
+            results.forEach(result => {
+                const profitClass = result.profit_margin >= 0 ? 'profit-positive' : 'profit-negative';
+                const actionClass = `action-${result.recommended_action.toLowerCase().replace(' ', '-')}`;
+                
+                html += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card card-listing">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span class="badge score-badge ${actionClass}">
+                                    ${result.recommended_action}
+                                </span>
+                                <span class="badge bg-primary">
+                                    Score: ${result.arbitrage_score}
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <h6 class="card-title">${result.title}</h6>
+                                <p class="card-text text-muted small">
+                                    <i class="fas fa-tag me-1"></i>${result.search_term}
+                                </p>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Buyee Price:</small><br>
+                                        <strong>¥${result.price_yen}</strong><br>
+                                        <small class="text-muted">($${result.price_usd})</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">eBay Avg:</small><br>
+                                        <strong class="${profitClass}">$${result.ebay_avg_price}</strong>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Profit:</small><br>
+                                        <span class="${profitClass}">${result.profit_margin}%</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Condition:</small><br>
+                                        <span>${result.condition || 'Unknown'}</span>
+                                    </div>
+                                </div>
+                                ${result.url ? `
+                                    <div class="mt-3">
+                                        <a href="${result.url}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-external-link-alt me-1"></i>View Listing
+                                        </a>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+        
+        function updateStats() {
+            if (currentResults.length === 0) {
+                document.getElementById('total-listings').textContent = '0';
+                document.getElementById('profitable-listings').textContent = '0';
+                document.getElementById('strong-buys').textContent = '0';
+                document.getElementById('avg-score').textContent = '0';
+                return;
+            }
+            
+            const profitable = currentResults.filter(r => r.profit_margin > 0).length;
+            const strongBuys = currentResults.filter(r => r.recommended_action === 'STRONG BUY').length;
+            const avgScore = (currentResults.reduce((sum, r) => sum + r.arbitrage_score, 0) / currentResults.length).toFixed(1);
+            
+            document.getElementById('total-listings').textContent = currentResults.length;
+            document.getElementById('profitable-listings').textContent = profitable;
+            document.getElementById('strong-buys').textContent = strongBuys;
+            document.getElementById('avg-score').textContent = avgScore;
+        }
+        
+        function applyFilters() {
+            loadResults();
+        }
+        
+        function loadSearchTerms() {
+            fetch('/api/search_terms')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('searchTermFilter');
+                        select.innerHTML = '<option value="">All Terms</option>';
+                        data.search_terms.forEach(term => {
+                            select.innerHTML += `<option value="${term}">${term}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading search terms:', error));
+        }
+        
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadResults();
+            loadSearchTerms();
+        });
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadResults, 30000);
+    </script>
+</body>
+</html> 
