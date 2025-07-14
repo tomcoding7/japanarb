@@ -195,46 +195,132 @@ class PriceAnalyzer:
         self.request_handler = RequestHandler()
     
     def get_130point_prices(self, card_name: str, set_code: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Get price data from 130point.com."""
+        """Get price data from 130point.com using the correct API endpoint."""
         try:
+            # Combine card name and set code for search
             search_term = f"{card_name} {set_code}" if set_code else card_name
-            search_term = quote(search_term)
-            url = f"https://130point.com/sales/?item={search_term}"
             
+            # API endpoint
+            url = "https://back.130point.com/sales/"
+            
+            # Prepare form data as per the XHR request
+            form_data = {
+                'query': search_term,
+                'type': '2',      # Type 2 seems to be for card searches
+                'subcat': '-1'    # -1 for all subcategories
+            }
+            
+            # Headers to match the XHR request
+            headers = {
+                'Accept': '*/*',
+                'Referer': 'https://130point.com/',
+                'Origin': 'https://130point.com',
+            }
+            
+            # Add delay to avoid rate limiting
             time.sleep(random.uniform(2, 4))
-            html_content = self.request_handler.get_page(url)
-            if not html_content:
+            
+            # Make POST request
+            try:
+                # Percent encode form data
+                encoded_data = {
+                    'query': quote(form_data['query'], safe=''),
+                    'type': form_data['type'],
+                    'subcat': form_data['subcat']
+                }
+                
+                response = self.request_handler.session.post(
+                    url, 
+                    data=encoded_data, 
+                    headers=headers, 
+                    timeout=self.request_handler.timeout,
+                )
+                response.raise_for_status()
+                
+                # Since the response is HTML, not JSON, we need to parse it
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Extract the data from the HTML structure
+                # This will need to be adjusted based on the actual HTML structure
+                data = {'sales': []}
+                
+                # Look for sale items in the HTML
+                sale_items = soup.select('.sale-item') or soup.select('.item') or soup.select('tr#rowsold_dataTable')
+                
+                for item in sale_items:
+                    try:
+                        price_elem = item.select_one('.bidLink') or item.select_one('[data-price]')
+                        condition_elem = item.select_one('.condition') or item.select_one('.grade')
+                        
+                        if price_elem:
+                            price_text = price_elem.text.strip() if price_elem.text else str(price_elem.get('data-price', ''))
+                            condition = condition_elem.text.strip() if condition_elem else ''
+                            
+                            # Clean the price text to remove currency symbols and text
+                            cleaned_price = re.sub(r'[^\d.]', '', price_text).strip()
+                            
+                            if cleaned_price:  # Only add if we have a valid price
+                                data['sales'].append({
+                                    'price': cleaned_price,
+                                    'condition': condition
+                                })
+                    except Exception as e:
+                        logger.warning(f"Failed to parse HTML item: {str(e)}")
+                        continue
+                
+                logger.info(f"Parsed {len(data['sales'])} items from HTML response")
+                
+            except requests.RequestException as e:
+                logger.error(f"Error making request to 130point API: {str(e)}")
+                raise e
                 return None
             
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
+            # Parse the JSON response
             raw_prices = []
             psa_9_prices = []
             psa_10_prices = []
             
-            sales = soup.find_all('div', class_='sale-item')
-            for sale in sales:
-                try:
-                    price_elem = sale.find('span', class_='price')
-                    if not price_elem:
-                        continue
-                    price = float(price_elem.text.strip().replace('$', '').replace(',', ''))
-                    
-                    condition_elem = sale.find('span', class_='condition')
-                    if not condition_elem:
-                        continue
-                    condition = condition_elem.text.strip().lower()
-                    
-                    if 'psa 10' in condition:
-                        psa_10_prices.append(price)
-                    elif 'psa 9' in condition:
-                        psa_9_prices.append(price)
-                    else:
-                        raw_prices.append(price)
+            # The exact structure depends on the API response format
+            # This is a best guess - may need adjustment based on actual response
+            sales_data = data.get('sales', []) or data.get('results', []) or data.get('data', [])
+            
+            if isinstance(sales_data, list):
+                for sale in sales_data:
+                    try:
+                        # Extract price - adjust field names based on actual API response
+                        price = None
+                        for price_field in ['price', 'sale_price', 'amount', 'cost']:
+                            if price_field in sale:
+                                price_str = str(sale[price_field])
+                                # Remove currency symbols and text, keep only numbers and decimal points
+                                price_str = re.sub(r'[^\d.]', '', price_str).strip()
+                                if price_str:  # Only try to convert if we have a valid string
+                                    price = float(price_str)
+                                    break
                         
-                except (ValueError, AttributeError) as e:
-                    logger.warning(f"Error parsing sale entry: {str(e)}")
-                    continue
+                        if price is None:
+                            continue
+                        
+                        # Extract condition - adjust field names based on actual API response
+                        condition = ''
+                        for condition_field in ['condition', 'grade', 'state', 'quality']:
+                            if condition_field in sale:
+                                condition = str(sale[condition_field]).lower()
+                                break
+                        
+                        # Categorize based on condition
+                        if 'psa 10' in condition or 'psa10' in condition:
+                            psa_10_prices.append(price)
+                        elif 'psa 9' in condition or 'psa9' in condition:
+                            psa_9_prices.append(price)
+                        else:
+                            raw_prices.append(price)
+                            
+                    except (ValueError, TypeError, KeyError) as e:
+                        logger.warning(f"Error parsing sale entry: {str(e)}")
+                        continue
+            
+            logger.info(f"130point search for '{search_term}': found {len(raw_prices)} raw, {len(psa_9_prices)} PSA 9, {len(psa_10_prices)} PSA 10 prices")
             
             return {
                 'raw_avg': statistics.mean(raw_prices) if raw_prices else None,

@@ -5,18 +5,21 @@ An advanced arbitrage bot that analyzes Yu-Gi-Oh! card prices across multiple pl
 ## Features
 
 ### 🔍 Multi-Platform Price Analysis
+
 - **Buyee.jp**: Scrapes current Japanese auction listings
 - **130point.com/sales**: Analyzes recent eBay sold prices
 - **eBay**: Cross-references with additional sold listings
 - **Real-time exchange rates**: Yen to USD conversion
 
 ### 📊 Advanced Arbitrage Scoring
+
 - **Comprehensive scoring system** (0-100 points)
 - **Profit margin analysis** with condition adjustments
 - **Risk assessment** based on data reliability
 - **Smart recommendations**: STRONG BUY, BUY, CONSIDER, PASS
 
 ### 🎯 Intelligent Deal Detection
+
 - **Condition-based pricing**: Adjusts for card condition (new/used/damaged)
 - **PSA grading support**: Separate analysis for graded vs raw cards
 - **Multi-source validation**: Combines data from multiple sources
@@ -25,17 +28,21 @@ An advanced arbitrage bot that analyzes Yu-Gi-Oh! card prices across multiple pl
 ## Installation
 
 1. **Clone the repository**:
+
 ```bash
 git clone <repository-url>
-cd pythonbot
 ```
 
 2. **Install dependencies**:
+
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
 3. **Set up environment variables** (optional for LLM features):
+
 ```bash
 cp .env.example .env
 # Edit .env and add your OpenAI API key if using LLM features
@@ -88,26 +95,30 @@ python test_arbitrage.py
 ## How It Works
 
 ### 1. Data Collection
+
 - **Buyee.jp scraping**: Uses undetected-chromedriver to avoid detection
 - **130point.com API**: Fetches recent eBay sold prices
 - **eBay scraping**: Additional price validation
 - **Card identification**: Extracts card names and set codes
 
 ### 2. Price Analysis
+
 - **Multi-source aggregation**: Combines data from all sources
 - **Condition adjustment**: Applies multipliers based on card condition
 - **PSA grading**: Separate analysis for graded cards
 - **Exchange rate conversion**: Real-time Yen to USD conversion
 
 ### 3. Arbitrage Scoring
+
 The bot calculates a comprehensive score (0-100) based on:
 
 - **Profit Margin (40%)**: Higher margins = higher scores
-- **Absolute Profit (30%)**: Larger profits = higher scores  
+- **Absolute Profit (30%)**: Larger profits = higher scores
 - **Data Reliability (20%)**: Multiple sources = higher scores
 - **Risk Assessment (10%)**: Lower risk = higher scores
 
 ### 4. Recommendations
+
 Based on the arbitrage score:
 
 - **STRONG BUY**: Score ≥70, margin ≥30%, profit ≥$50
@@ -118,27 +129,30 @@ Based on the arbitrage score:
 ## Output
 
 ### CSV Results
+
 Detailed analysis saved as `arbitrage_[search]_[timestamp].csv`:
 
-| Column | Description |
-|--------|-------------|
-| `title` | Original Japanese title |
-| `title_en` | English translation |
-| `price_yen` | Buyee price in Yen |
-| `price_usd` | Converted USD price |
-| `condition` | Card condition |
-| `ebay_raw_prices` | Raw eBay sold prices |
-| `ebay_psa_prices` | PSA graded eBay prices |
-| `point130_raw_avg` | 130point.com raw average |
-| `point130_psa9_avg` | 130point.com PSA 9 average |
-| `point130_psa10_avg` | 130point.com PSA 10 average |
-| `potential_profit` | Calculated profit in USD |
-| `profit_margin` | Profit margin percentage |
-| `arbitrage_score` | Overall score (0-100) |
+| Column               | Description                  |
+| -------------------- | ---------------------------- |
+| `title`              | Original Japanese title      |
+| `title_en`           | English translation          |
+| `price_yen`          | Buyee price in Yen           |
+| `price_usd`          | Converted USD price          |
+| `condition`          | Card condition               |
+| `ebay_raw_prices`    | Raw eBay sold prices         |
+| `ebay_psa_prices`    | PSA graded eBay prices       |
+| `point130_raw_avg`   | 130point.com raw average     |
+| `point130_psa9_avg`  | 130point.com PSA 9 average   |
+| `point130_psa10_avg` | 130point.com PSA 10 average  |
+| `potential_profit`   | Calculated profit in USD     |
+| `profit_margin`      | Profit margin percentage     |
+| `arbitrage_score`    | Overall score (0-100)        |
 | `recommended_action` | STRONG BUY/BUY/CONSIDER/PASS |
 
 ### Console Summary
+
 Real-time analysis summary showing:
+
 - Total listings analyzed
 - Profitable opportunities found
 - Top recommendations
@@ -147,13 +161,17 @@ Real-time analysis summary showing:
 ## Configuration
 
 ### Exchange Rate
+
 Update the exchange rate in `card_arbitrage.py`:
+
 ```python
 self.yen_to_usd = Decimal('0.0067')  # Current rate
 ```
 
 ### Arbitrage Thresholds
+
 Adjust thresholds in `card_arbitrage.py`:
+
 ```python
 self.min_profit_margin = 30.0  # Minimum 30% profit margin
 self.min_profit_usd = 50.0     # Minimum $50 profit
@@ -163,6 +181,7 @@ self.max_risk_score = 0.7      # Maximum risk score (0-1)
 ## Advanced Usage
 
 ### Custom Analysis
+
 ```python
 from card_arbitrage import CardArbitrageTool
 
@@ -177,6 +196,7 @@ tool.cleanup()
 ```
 
 ### Batch Processing
+
 ```python
 import time
 from card_arbitrage import CardArbitrageTool
@@ -185,7 +205,7 @@ tool = CardArbitrageTool()
 
 search_terms = [
     "青眼の白龍",
-    "ブラック・マジシャン", 
+    "ブラック・マジシャン",
     "レッドアイズ・ブラック・ドラゴン"
 ]
 
@@ -202,6 +222,7 @@ tool.cleanup()
 ### Common Issues
 
 1. **WebDriver errors**: Install undetected-chromedriver
+
 ```bash
 pip install undetected-chromedriver
 ```
@@ -209,6 +230,7 @@ pip install undetected-chromedriver
 2. **Translation errors**: Check internet connection for Google Translate
 
 3. **Rate limiting**: Add delays between requests
+
 ```python
 time.sleep(2)  # 2-second delay
 ```
@@ -216,7 +238,9 @@ time.sleep(2)  # 2-second delay
 4. **No results found**: Try different search terms or check Buyee.jp availability
 
 ### Debug Mode
+
 Enable detailed logging:
+
 ```python
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -225,8 +249,9 @@ logging.basicConfig(level=logging.DEBUG)
 ## Legal Notice
 
 This bot is for educational purposes only. Please ensure compliance with:
+
 - Buyee.jp Terms of Service
-- eBay Terms of Service  
+- eBay Terms of Service
 - 130point.com Terms of Service
 - Local laws and regulations
 

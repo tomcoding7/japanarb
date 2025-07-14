@@ -206,21 +206,25 @@ class CardArbitrageTool:
             avg_psa_ebay = statistics.mean(ebay_prices['psa']) if ebay_prices['psa'] else 0
             
             # Get 130point prices
-            avg_raw_130 = point130_prices.get('raw_avg', 0) if point130_prices else 0
-            avg_psa_9_130 = point130_prices.get('psa_9_avg', 0) if point130_prices else 0
-            avg_psa_10_130 = point130_prices.get('psa_10_avg', 0) if point130_prices else 0
+            avg_raw_130 = point130_prices.get('raw_avg', 0) or 0 if point130_prices else 0
+            avg_psa_9_130 = point130_prices.get('psa_9_avg', 0) or 0 if point130_prices else 0
+            avg_psa_10_130 = point130_prices.get('psa_10_avg', 0) or 0 if point130_prices else 0
+            
+            assert avg_raw_130 is not None
+            assert avg_psa_9_130 is not None
+            assert avg_psa_10_130 is not None
             
             # Determine target price based on condition
             target_price = 0
-            condition_multiplier = 1.0
+            condition_multiplier = Decimal('1.0')
             
             # Adjust for condition
             if 'new' in condition.lower() or 'mint' in condition.lower():
-                condition_multiplier = 1.0
+                condition_multiplier = Decimal('1.0')
             elif 'used' in condition.lower() or 'played' in condition.lower():
-                condition_multiplier = 0.8
+                condition_multiplier = Decimal('0.8')
             elif 'damaged' in condition.lower():
-                condition_multiplier = 0.6
+                condition_multiplier = Decimal('0.6')
             
             # Use the best available price data
             if avg_psa_10_130 > 0:
@@ -238,7 +242,7 @@ class CardArbitrageTool:
                 return Decimal('0'), 0.0, 0.0, "No price data available"
             
             # Apply condition multiplier
-            target_price *= condition_multiplier
+            target_price = Decimal(str(target_price)) * condition_multiplier
             
             # Calculate fees and costs
             ebay_fees = target_price * Decimal('0.15')  # 15% eBay fees
@@ -307,7 +311,7 @@ class CardArbitrageTool:
             
         except Exception as e:
             logger.error(f"Error calculating arbitrage score: {str(e)}")
-            return Decimal('0'), 0.0, 0.0, "Error in calculation"
+            raise e
 
     def pre_screen_listings(self, listings: List[CardListing]) -> List[CardListing]:
         """Pre-screen listings to identify promising candidates for detailed analysis."""
@@ -429,8 +433,8 @@ class CardArbitrageTool:
             for item in items:
                 try:
                     # Extract basic information
-                    title = item.find_element(By.CSS_SELECTOR, "h3.itemCard__itemName").text.strip()
-                    price_text = item.find_element(By.CSS_SELECTOR, "div.itemCard__price").text.strip()
+                    title = item.find_element(By.CSS_SELECTOR, "div.itemCard__itemName").text.strip()
+                    price_text = item.find_element(By.CSS_SELECTOR, ".itemCard__itemInfo .g-price").text.strip()
                     price_yen = Decimal(re.sub(r'[^\d.]', '', price_text))
                     image_url = item.find_element(By.CSS_SELECTOR, "img").get_attribute("src")
                     listing_url = item.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
@@ -554,9 +558,13 @@ class CardArbitrageTool:
             logger.info(f"Saved results to {csv_path}")
             
             # Save as JSON
+            def decimal_converter(obj):
+                if isinstance(obj, Decimal):
+                    return float(obj)
+                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
             json_path = os.path.join(self.output_dir, f"arbitrage_{keyword}_{timestamp}.json")
             with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2, default=decimal_converter)
             logger.info(f"Saved results to {json_path}")
             
             # Print summary
@@ -564,6 +572,7 @@ class CardArbitrageTool:
             
         except Exception as e:
             logger.error(f"Error saving results: {str(e)}")
+            raise e
 
     def print_summary(self, df: pd.DataFrame):
         """Print a summary of the arbitrage analysis."""
