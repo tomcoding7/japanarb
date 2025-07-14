@@ -49,14 +49,14 @@ def main():
         print("The web interface will work but searches may fail.")
     
     print("\n🌐 Starting web server...")
-    print("📱 Open your browser to: http://localhost:5000")
+    print("📱 Open your browser to: http://localhost:5001")
     print("🛑 Press Ctrl+C to stop the server")
     print("=" * 60)
     
     try:
         # Import and run the web interface
         from web_interface import app
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        app.run(debug=True, host='0.0.0.0', port=5001)
     except KeyboardInterrupt:
         print("\n🛑 Server stopped by user")
     except Exception as e:

@@ -14,7 +14,7 @@ def test_api():
     
     try:
         # Test the search API
-        url = "http://localhost:5000/api/search"
+        url = "http://localhost:5001/api/search"
         data = {
             "search_term": "青眼の白龍",
             "max_results": 5
