@@ -32,6 +32,7 @@ def test_arbitrage_analysis():
         
     except Exception as e:
         logger.error(f"Error in arbitrage test: {str(e)}")
+        raise e
     finally:
         tool.cleanup()
 
