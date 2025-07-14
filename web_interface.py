@@ -217,5 +217,5 @@ def api_search_terms():
 
 if __name__ == '__main__':
     print("Starting Yu-Gi-Oh! Arbitrage Bot Web Interface...")
-    print("Open your browser to: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    print("Open your browser to: http://localhost:5001")
+    app.run(debug=True, host='0.0.0.0', port=5001)

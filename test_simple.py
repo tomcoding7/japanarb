@@ -49,6 +49,6 @@ if __name__ == '__main__':
     success = test_simple_arbitrage()
     if success:
         print("\n🚀 You can now use the web interface!")
-        print("📱 Open your browser to: http://localhost:5000")
+        print("📱 Open your browser to: http://localhost:5001")
     else:
         print("\n⚠️  There are still some issues to resolve.") 
