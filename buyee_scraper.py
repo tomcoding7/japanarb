@@ -127,7 +127,7 @@ class BuyeeScraper:
                     chrome_options.add_argument('--headless=new')
                 
                 # Set up service
-                service = Service(ChromeDriverManager().install())
+                service = Service(r'C:/Users/tochs/.wdm/drivers/chromedriver/win64/138.0.7204.94/chromedriver-win64/chromedriver.exe')
                 
                 # Initialize driver
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)

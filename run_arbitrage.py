@@ -7,6 +7,8 @@ Combines Buyee.jp data with 130point.com/sales and eBay data for arbitrage oppor
 import argparse
 import logging
 from card_arbitrage import CardArbitrageTool
+from dotenv import load_dotenv
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(

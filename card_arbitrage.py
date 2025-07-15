@@ -104,8 +104,8 @@ class CardArbitrageTool:
             options.add_argument('--headless')  # Run in background
             options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
             
-            # Use regular Chrome driver
-            service = Service(ChromeDriverManager().install())
+            # Use manually specified 64-bit Chrome driver
+            service = Service(r'C:/Users/tochs/.wdm/drivers/chromedriver/win64/138.0.7204.94/chromedriver-win64/chromedriver.exe')
             self.driver = webdriver.Chrome(service=service, options=options)
             logger.info("Chrome WebDriver setup complete for Buyee scraping")
             
