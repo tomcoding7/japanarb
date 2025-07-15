@@ -643,6 +643,14 @@ class CardArbitrageTool:
             # Convert to dictionary format for web interface
             results = []
             for listing in analyzed_listings:
+                # Derive Yahoo Auction URL from Buyee listing_url if possible
+                yahoo_url = None
+                if listing.listing_url:
+                    import re
+                    match = re.search(r'/([a-z]\d+)(?:\?|$)', listing.listing_url)
+                    if match:
+                        yahoo_id = match.group(1)
+                        yahoo_url = f"https://page.auctions.yahoo.co.jp/jp/auction/{yahoo_id}"
                 results.append({
                     'title': listing.title,
                     'title_en': listing.title_en,
@@ -650,7 +658,8 @@ class CardArbitrageTool:
                     'price_usd': float(listing.price_usd),
                     'condition': listing.condition,
                     'image_url': listing.image_url,
-                    'listing_url': listing.listing_url,
+                    'listing_url': listing.listing_url,  # Buyee link
+                    'yahoo_url': yahoo_url,              # Yahoo Auction link
                     'description': listing.description,
                     'description_en': listing.description_en,
                     'card_id': listing.card_id,

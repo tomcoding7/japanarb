@@ -40,8 +40,7 @@ class CardInfo:
 
 class CardAnalyzer:
     def __init__(self, use_llm: bool = False):
-        load_dotenv()
-        self.use_llm = use_llm
+        self.use_llm = False  # Always disable LLM/AI
         
         # Initialize OpenAI client only if LLM is enabled and API key is available
         self.client = None
@@ -187,87 +186,7 @@ class CardAnalyzer:
                 card_info.matched_keywords.extend(valuable_set_matches)
             
             # 2. AI Analysis
-            if self.use_llm:
-                try:
-                    # Prepare analysis prompt
-                    analysis_prompt = f"""
-                    Analyze this Yu-Gi-Oh! card listing:
-                    Title: {title}
-                    Description: {description}
-                    Current Price: ¥{price}
-                    
-                    Please provide a detailed analysis including:
-                    1. Card identification (name, set, number if visible)
-                    2. Condition assessment
-                    3. Authenticity check
-                    4. Value assessment based on recent eBay sales
-                    5. Profit potential analysis
-                    6. Recommendation (Buy/Pass)
-                    
-                    Format your response as JSON with these keys:
-                    {{
-                        "card_name": "string",
-                        "set_code": "string",
-                        "card_number": "string",
-                        "condition": "string",
-                        "authenticity": "string",
-                        "value_assessment": {{
-                            "min_value": float,
-                            "max_value": float,
-                            "confidence": float
-                        }},
-                        "profit_potential": {{
-                            "estimated_profit": float,
-                            "risk_level": "string",
-                            "confidence": float
-                        }},
-                        "recommendation": {{
-                            "action": "string",
-                            "reasoning": "string",
-                            "confidence": float
-                        }}
-                    }}
-                    """
-                    
-                    # Call OpenAI API
-                    response = self.client.chat.completions.create(
-                        model="gpt-4-turbo",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert Yu-Gi-Oh! card evaluator with deep knowledge of card values, conditions, and market trends."
-                            },
-                            {
-                                "role": "user",
-                                "content": analysis_prompt
-                            }
-                        ],
-                        response_format={"type": "json_object"}
-                    )
-                    
-                    # Parse AI response
-                    ai_analysis = json.loads(response.choices[0].message.content)
-                    card_info.ai_analysis = ai_analysis
-                    
-                    # Update card info based on AI analysis
-                    if 'value_assessment' in ai_analysis:
-                        card_info.estimated_value = {
-                            'min': ai_analysis['value_assessment']['min_value'],
-                            'max': ai_analysis['value_assessment']['max_value']
-                        }
-                    
-                    if 'profit_potential' in ai_analysis:
-                        card_info.profit_potential = ai_analysis['profit_potential']['estimated_profit']
-                    
-                    if 'recommendation' in ai_analysis:
-                        card_info.recommendation = f"{ai_analysis['recommendation']['action']}: {ai_analysis['recommendation']['reasoning']}"
-                    
-                    # Update confidence score
-                    if 'value_assessment' in ai_analysis and 'confidence' in ai_analysis['value_assessment']:
-                        card_info.confidence_score = ai_analysis['value_assessment']['confidence']
-                    
-                except Exception as e:
-                    logger.error(f"Error in AI analysis: {str(e)}")
+            # Only do rule-based analysis, never call OpenAI
             
             # 3. Combine Rule-Based and AI Analysis
             # If we have both valuable name and set/promo matches, boost confidence
@@ -276,9 +195,9 @@ class CardAnalyzer:
                 card_info.confidence_score = max(card_info.confidence_score, 0.7)  # Minimum 0.7 if both present
             
             # If AI analysis suggests high value, boost confidence
-            if card_info.ai_analysis and card_info.ai_analysis.get('value_assessment', {}).get('confidence', 0) > 0.8:
-                card_info.is_valuable = True
-                card_info.confidence_score = max(card_info.confidence_score, 0.8)
+            # This part is now always rule-based, so no LLM influence here.
+            # card_info.is_valuable = True
+            # card_info.confidence_score = max(card_info.confidence_score, 0.8)
             
             # 4. Extract Additional Details
             # Set code and card number

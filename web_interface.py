@@ -122,6 +122,15 @@ def results_page():
     """Results page with filtering"""
     return render_template('results.html')
 
+@app.route('/result/<result_id>')
+def result_detail(result_id):
+    """Detailed view for a single result"""
+    # Find the result by id
+    result = next((r for r in interface.results if r.get('id') == result_id), None)
+    if not result:
+        return render_template('detail.html', error='Result not found', result=None)
+    return render_template('detail.html', result=result)
+
 @app.route('/api/search', methods=['POST'])
 def api_search():
     """API endpoint for running searches"""

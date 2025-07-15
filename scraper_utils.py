@@ -105,9 +105,8 @@ class RequestHandler:
 class CardInfoExtractor:
     """Extracts and normalizes card information from titles."""
     
-    def __init__(self):
-        # Initialize OpenAI
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    def __init__(self, use_llm: bool = False):
+        self.use_llm = False  # Always disable LLM/AI
         
         # Common set codes and their full names
         self.set_patterns = {
@@ -119,28 +118,8 @@ class CardInfoExtractor:
         }
     
     def translate_to_english(self, japanese_text: str) -> str:
-        """Translate Japanese card name to English using OpenAI."""
-        try:
-            prompt = f"""Translate this Yu-Gi-Oh card name from Japanese to English. 
-            Only return the English name, nothing else. If it's a set name or condition, ignore it.
-            Japanese text: {japanese_text}"""
-            
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a Yu-Gi-Oh card name translator. Only return the English name, no explanations."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3  # Lower temperature for more consistent translations
-            )
-            
-            english_name = response.choices[0].message.content.strip()
-            logger.info(f"Translated '{japanese_text}' to '{english_name}'")
-            return english_name
-            
-        except Exception as e:
-            logger.error(f"Error translating card name: {str(e)}")
-            return japanese_text
+        # Never call OpenAI, just return the input or a stub
+        return japanese_text
     
     def extract_card_info(self, title: str) -> Tuple[str, Optional[str]]:
         """Extract card name and set from title."""
