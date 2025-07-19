@@ -11,6 +11,11 @@ import logging
 from datetime import datetime
 import os
 from typing import List, Dict, Any
+import decimal
+import threading
+import time
+from card_arbitrage import CardArbitrageTool
+from search_terms import SEARCH_TERMS
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +26,7 @@ app = Flask(__name__)
 # Global variable to store latest results
 latest_results = None
 search_history = []
+SAVED_RESULTS_PATH = "saved_results.json"
 
 class WebArbitrageInterface:
     """Web interface for arbitrage results"""
@@ -28,9 +34,10 @@ class WebArbitrageInterface:
     def __init__(self):
         self.results = []
         self.search_terms = []
+        self.load_results()
     
     def add_results(self, search_term: str, results: List[Dict]):
-        """Add new search results"""
+        """Add new search results and save to disk"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         for result in results:
@@ -41,6 +48,31 @@ class WebArbitrageInterface:
         self.results.extend(results)
         if search_term not in self.search_terms:
             self.search_terms.append(search_term)
+        self.save_results()
+
+    def save_results(self):
+        def convert(obj):
+            if isinstance(obj, decimal.Decimal):
+                return float(obj)
+            if isinstance(obj, dict):
+                return {k: convert(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [convert(i) for i in obj]
+            return obj
+        try:
+            with open(SAVED_RESULTS_PATH, 'w', encoding='utf-8') as f:
+                json.dump(convert(self.results), f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving results to disk: {e}")
+
+    def load_results(self):
+        try:
+            if os.path.exists(SAVED_RESULTS_PATH):
+                with open(SAVED_RESULTS_PATH, 'r', encoding='utf-8') as f:
+                    self.results = json.load(f)
+                logger.info(f"Loaded {len(self.results)} results from disk.")
+        except Exception as e:
+            logger.error(f"Error loading results from disk: {e}")
     
     def get_filtered_results(self, 
                            min_score: float = 0,
@@ -105,6 +137,23 @@ class WebArbitrageInterface:
 
 # Global interface instance
 interface = WebArbitrageInterface()
+
+def auto_search_loop(interface, interval_minutes=60):
+    tool = CardArbitrageTool()
+    while True:
+        for term in SEARCH_TERMS:
+            logger.info(f"[AutoSearch] Searching for: {term}")
+            try:
+                results = tool.run(term, max_results=20)
+                interface.add_results(term, results)
+                time.sleep(5)  # Short pause between terms
+            except Exception as e:
+                logger.error(f"[AutoSearch] Error searching for {term}: {e}")
+        logger.info(f"[AutoSearch] Sleeping for {interval_minutes} minutes...")
+        time.sleep(interval_minutes * 60)
+
+# Start auto-search in background after interface is created
+threading.Thread(target=auto_search_loop, args=(interface, 60), daemon=True).start()
 
 @app.route('/')
 def index():

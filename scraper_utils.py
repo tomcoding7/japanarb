@@ -10,6 +10,11 @@ import re
 import os
 import google.generativeai as genai
 from openai import OpenAI
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Set up logging
 logging.basicConfig(
@@ -116,56 +121,62 @@ class CardInfoExtractor:
             'SRL': 'Starter Deck Yugi',
             'PSV': 'Pharaoh\'s Servant',
         }
+        # Expanded translation mapping for common Yu-Gi-Oh cards
+        self.jp_to_en = {
+            "青眼の白龍": "Blue-Eyes White Dragon",
+            "ブルーアイズホワイトドラゴン": "Blue-Eyes White Dragon",
+            "ブラック・マジシャン": "Dark Magician",
+            "真紅眼の黒竜": "Red-Eyes Black Dragon",
+            "レッドアイズ・ブラック・ドラゴン": "Red-Eyes Black Dragon",
+            "カオス・ソルジャー": "Black Luster Soldier",
+            "エクゾディア": "Exodia",
+            "サイバー・ドラゴン": "Cyber Dragon",
+            "E・HERO ネオス": "Elemental HERO Neos",
+            "スターダスト・ドラゴン": "Stardust Dragon",
+            "ブラックローズ・ドラゴン": "Black Rose Dragon",
+            "混沌の黒魔術師": "Dark Magician of Chaos",
+            # Add more as needed
+        }
     
     def translate_to_english(self, japanese_text: str) -> str:
-        # Never call OpenAI, just return the input or a stub
+        # Use mapping for common cards, fallback to original text
+        for jp, en in self.jp_to_en.items():
+            if jp in japanese_text:
+                return en
         return japanese_text
     
-    def extract_card_info(self, title: str) -> Tuple[str, Optional[str]]:
-        """Extract card name and set from title."""
+    def extract_card_info(self, title: str) -> Tuple[str, Optional[str], Optional[str]]:
+        """Extract card name, set code, and region from title."""
         try:
-            # Try to find set code first
             set_code = None
             for code in self.set_patterns.keys():
                 if code in title.upper():
                     set_code = code
                     break
-            
-            # Extract card name
             card_name = title
-            
-            # Remove common words and set codes
             common_words = [
-                '遊戯王', 'Yu-Gi-Oh', 'カード', 'card', '1st', 'edition', 'limited', 
+                '遊戯王', 'Yu-Gi-Oh', 'カード', 'card', '1st', 'edition', 'limited',
                 'まとめ', 'レア', 'rare', 'セット', 'set', 'パック', 'pack',
                 '新品', '未使用', '中古', '使用済み', 'プレイ済み'
             ]
-            
-            # Remove common words
             for word in common_words:
                 card_name = card_name.replace(word, '').strip()
-            
-            # Remove set code if found
             if set_code:
                 card_name = card_name.replace(set_code, '').strip()
-            
-            # Remove numbers at the end (like "864" in "まとめ 864")
             card_name = re.sub(r'\s*\d+$', '', card_name).strip()
-            
-            # If the name is too short or just numbers, try to extract from description
-            if len(card_name) < 3 or card_name.isdigit():
-                logger.warning(f"Card name too short or invalid: {card_name}")
-                return None, set_code
-            
-            # Translate to English if it contains Japanese characters
+            # Region/language extraction (simple)
+            region = None
+            if '日本' in title or '日' in title or 'Japanese' in title:
+                region = 'Japanese'
+            elif '英' in title or 'English' in title:
+                region = 'English'
+            # Translate if Japanese
             if any(ord(c) > 127 for c in card_name):
                 card_name = self.translate_to_english(card_name)
-            
-            return card_name, set_code
-            
+            return card_name, set_code, region
         except Exception as e:
             logger.error(f"Error extracting card info: {str(e)}")
-            return None, None
+            return None, None, None
 
 class PriceAnalyzer:
     """Analyzes card prices from 130point.com."""
@@ -174,7 +185,8 @@ class PriceAnalyzer:
         self.request_handler = RequestHandler()
     
     def get_130point_prices(self, card_name: str, set_code: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Get price data from 130point.com using the correct API endpoint."""
+        """Get price data from 130point.com using the correct API endpoint. Falls back to Selenium if needed."""
+        # Try requests-based method first
         try:
             # Combine card name and set code for search
             search_term = f"{card_name} {set_code}" if set_code else card_name
@@ -220,7 +232,6 @@ class PriceAnalyzer:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
                 # Extract the data from the HTML structure
-                # This will need to be adjusted based on the actual HTML structure
                 data = {'sales': []}
                 
                 # Look for sale items in the HTML
@@ -301,17 +312,84 @@ class PriceAnalyzer:
             
             logger.info(f"130point search for '{search_term}': found {len(raw_prices)} raw, {len(psa_9_prices)} PSA 9, {len(psa_10_prices)} PSA 10 prices")
             
-            return {
-                'raw_avg': statistics.mean(raw_prices) if raw_prices else None,
-                'psa_9_avg': statistics.mean(psa_9_prices) if psa_9_prices else None,
-                'psa_10_avg': statistics.mean(psa_10_prices) if psa_10_prices else None,
-                'raw_count': len(raw_prices),
-                'psa_9_count': len(psa_9_prices),
-                'psa_10_count': len(psa_10_prices)
-            }
-            
+            # If we got results, return them
+            if raw_prices or psa_9_prices or psa_10_prices:
+                return {
+                    'raw_avg': statistics.mean(raw_prices) if raw_prices else None,
+                    'psa_9_avg': statistics.mean(psa_9_prices) if psa_9_prices else None,
+                    'psa_10_avg': statistics.mean(psa_10_prices) if psa_10_prices else None,
+                    'raw_count': len(raw_prices),
+                    'psa_9_count': len(psa_9_prices),
+                    'psa_10_count': len(psa_10_prices)
+                }
         except Exception as e:
-            logger.error(f"Error getting 130point prices: {str(e)}")
+            logger.error(f"Error getting 130point prices (requests): {str(e)}")
+            # Continue to Selenium fallback
+        # If requests-based failed or returned no results, try Selenium
+        return self._get_130point_prices_selenium(card_name, set_code)
+
+    def _get_130point_prices_selenium(self, card_name: str, set_code: Optional[str] = None, headless: bool = True) -> Optional[Dict[str, Any]]:
+        """Scrape 130point.com/sales using Selenium to get actual sale prices from the search bar results.
+        Uses translated, shortened English search terms for best results.
+        """
+        try:
+            # Use CardInfoExtractor to get best search term
+            extractor = CardInfoExtractor()
+            # Compose a pseudo-title for extraction
+            pseudo_title = card_name
+            if set_code:
+                pseudo_title += f" {set_code}"
+            card_name_en, set_code_extracted, region = extractor.extract_card_info(pseudo_title)
+            # Build search term: English card name, set code if present, and 'Japanese' if region is Japanese
+            search_term = card_name_en or card_name
+            if set_code_extracted:
+                search_term += f" {set_code_extracted}"
+            if region == 'Japanese':
+                search_term += " Japanese"
+            # Set up Selenium options
+            options = webdriver.ChromeOptions()
+            if headless:
+                options.add_argument('--headless')
+            driver = webdriver.Chrome(options=options)
+            driver.get("https://130point.com/sales/")
+            # Find the search bar and enter the search term
+            search_bar = driver.find_element(By.CSS_SELECTOR, 'input[type="text"][name="searchBar"][id="searchBar"]')
+            search_bar.send_keys(search_term)
+            search_bar.send_keys(Keys.RETURN)
+            # Wait for results to load (look for price inputs)
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="submit"][value*="USD"], input[type="submit"][value*="GBP"], input[type="submit"][value*="EUR"]'))
+            )
+            # Extract all price inputs
+            price_inputs = driver.find_elements(By.CSS_SELECTOR, 'input[type="submit"][value]')
+            raw_prices = []
+            psa_9_prices = []
+            psa_10_prices = []
+            for inp in price_inputs:
+                value = inp.get_attribute('value')
+                match = re.match(r'([\d,.]+)\s*([A-Z]{3})', value)
+                if match:
+                    price = float(match.group(1).replace(',', ''))
+                    currency = match.group(2)
+                    if currency == 'USD':
+                        # Try to categorize by PSA if possible (not always available)
+                        # For now, treat all as raw
+                        raw_prices.append(price)
+            driver.quit()
+            logger.info(f"[Selenium] 130point search for '{search_term}': found {len(raw_prices)} USD prices")
+            if raw_prices or psa_9_prices or psa_10_prices:
+                return {
+                    'raw_avg': statistics.mean(raw_prices) if raw_prices else None,
+                    'psa_9_avg': statistics.mean(psa_9_prices) if psa_9_prices else None,
+                    'psa_10_avg': statistics.mean(psa_10_prices) if psa_10_prices else None,
+                    'raw_count': len(raw_prices),
+                    'psa_9_count': len(psa_9_prices),
+                    'psa_10_count': len(psa_10_prices)
+                }
+            else:
+                return None
+        except Exception as e:
+            logger.error(f"[Selenium] Error scraping 130point.com/sales: {str(e)}")
             return None
 
 class ConditionAnalyzer:

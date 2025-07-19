@@ -449,7 +449,7 @@ class CardArbitrageTool:
                     title_en = self.translate_text(title)
                     
                     # Extract card info
-                    card_name, set_code = self.card_extractor.extract_card_info(title)
+                    card_name, set_code, region = self.card_extractor.extract_card_info(title)
                     
                     # Create listing object
                     listing = CardListing(

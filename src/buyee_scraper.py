@@ -117,6 +117,7 @@ class BuyeeScraper:
                             item.update(detail_data)
                         
                         # Perform AI analysis
+                        card_name, set_code, region = self.card_analyzer.extract_card_info(item['title'])
                         card_info = self.card_analyzer.analyze_card(item)
                         
                         # If item looks promising, add to initial leads

@@ -518,14 +518,12 @@ class BuyeeScraper:
                         logging.info(f"Found image using selector '{selector}': {src}")
             
             # Extract card-specific information
-            card_info = {}
-            
-            # Try to find set code and card number
-            set_code_match = re.search(r'([A-Z]{2,4})-(\d{3})', title)
-            if set_code_match:
-                card_info['set_code'] = set_code_match.group(1)
-                card_info['card_number'] = set_code_match.group(2)
-                logging.info(f"Found set code and number: {card_info['set_code']}-{card_info['card_number']}")
+            # Use CardInfoExtractor for robust extraction
+            from scraper_utils import CardInfoExtractor
+            card_name, set_code, region = CardInfoExtractor().extract_card_info(title)
+            card_info['card_name'] = card_name
+            card_info['set_code'] = set_code
+            card_info['region'] = region
             
             # Try to find edition
             edition_keywords = {
