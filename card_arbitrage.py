@@ -26,6 +26,7 @@ from urllib.parse import quote
 
 # Import our existing utilities
 from scraper_utils import PriceAnalyzer, CardInfoExtractor
+from ebay_api import EbayAPI
 
 # Set up logging
 logging.basicConfig(
@@ -74,6 +75,9 @@ class CardArbitrageTool:
         # Initialize analyzers
         self.price_analyzer = PriceAnalyzer()
         self.card_extractor = CardInfoExtractor()
+        
+        # Initialize eBay API
+        self.ebay_api = EbayAPI()
         
         # Setup webdriver
         self.driver = None
@@ -137,7 +141,25 @@ class CardArbitrageTool:
         return None
 
     def get_ebay_prices(self, card_name: str, set_code: Optional[str] = None) -> Dict[str, List[Decimal]]:
-        """Get eBay sold prices for a card."""
+        """Get eBay sold prices for a card using the eBay API."""
+        try:
+            # Use the eBay API to get card prices
+            prices = self.ebay_api.get_card_prices(card_name, set_code)
+            
+            # Log the results
+            raw_count = len(prices['raw'])
+            psa_count = len(prices['psa'])
+            logger.info(f"eBay API found {raw_count} raw and {psa_count} PSA listings for {card_name}")
+            
+            return prices
+            
+        except Exception as e:
+            logger.error(f"Error fetching eBay prices via API: {str(e)}")
+            # Fallback to web scraping if API fails
+            return self._get_ebay_prices_fallback(card_name, set_code)
+    
+    def _get_ebay_prices_fallback(self, card_name: str, set_code: Optional[str] = None) -> Dict[str, List[Decimal]]:
+        """Fallback method using web scraping if eBay API fails."""
         try:
             # Construct search term
             search_term = f"{card_name} {set_code}" if set_code else card_name
@@ -186,7 +208,7 @@ class CardArbitrageTool:
             return prices
             
         except Exception as e:
-            logger.error(f"Error fetching eBay prices: {str(e)}")
+            logger.error(f"Error fetching eBay prices via fallback: {str(e)}")
             return {'raw': [], 'psa': []}
 
     def get_130point_prices(self, card_name: str, set_code: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -651,6 +673,16 @@ class CardArbitrageTool:
                     if match:
                         yahoo_id = match.group(1)
                         yahoo_url = f"https://page.auctions.yahoo.co.jp/jp/auction/{yahoo_id}"
+
+                # Calculate best available average price (130point raw avg > eBay raw avg > 0)
+                ebay_avg_price = 0
+                if listing.point130_prices and listing.point130_prices.get('raw_avg'):
+                    ebay_avg_price = float(listing.point130_prices['raw_avg'])
+                elif listing.ebay_prices and listing.ebay_prices.get('raw') and listing.ebay_prices['raw']:
+                    import statistics
+                    ebay_avg_price = float(statistics.mean(listing.ebay_prices['raw']))
+                # else remains 0
+
                 results.append({
                     'title': listing.title,
                     'title_en': listing.title_en,
@@ -672,7 +704,7 @@ class CardArbitrageTool:
                     'recommended_action': listing.recommended_action or 'PASS',
                     'screening_score': listing.screening_score or 0,
                     'screening_reasons': listing.screening_reasons or [],
-                    'ebay_avg_price': 0,  # Would be calculated from real data
+                    'ebay_avg_price': ebay_avg_price,
                     'search_term': keyword
                 })
             

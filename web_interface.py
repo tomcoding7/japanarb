@@ -187,21 +187,36 @@ def api_search():
         data = request.get_json()
         search_term = data.get('search_term', '')
         max_results = data.get('max_results', 20)
-        
+        search_all = data.get('search_all', False)
+
         # Import here to avoid circular imports
         from card_arbitrage import CardArbitrageTool
-        tool = CardArbitrageTool()
-        results = tool.run(search_term, max_results=max_results)
-        
-        # Add to interface
-        interface.add_results(search_term, results)
-        
-        return jsonify({
-            'success': True,
-            'message': f'Found {len(results)} results for "{search_term}"',
-            'results_count': len(results)
-        })
-        
+        from buyee_scraper import BuyeeScraper
+        results = []
+        if search_all:
+            # Use category-wide search for 'yugioh' (can be expanded)
+            scraper = BuyeeScraper(output_dir='scraped_results', max_pages=5, headless=True, use_llm=False)
+            category_urls = scraper.get_category_urls('yugioh')
+            for category_url in category_urls:
+                results.extend(scraper.search_by_category(category_url))
+            # Optionally limit results
+            results = results[:max_results]
+            scraper.close()
+            interface.add_results('ALL_CATEGORY', results)
+            return jsonify({
+                'success': True,
+                'message': f'Found {len(results)} results for category-wide search',
+                'results_count': len(results)
+            })
+        else:
+            tool = CardArbitrageTool()
+            results = tool.run(search_term, max_results=max_results)
+            interface.add_results(search_term, results)
+            return jsonify({
+                'success': True,
+                'message': f'Found {len(results)} results for "{search_term}"',
+                'results_count': len(results)
+            })
     except Exception as e:
         logger.error(f"Search error: {e}")
         return jsonify({

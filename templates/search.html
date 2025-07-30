@@ -107,6 +107,16 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="row justify-content-center mt-2">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="searchAll">
+                                    <label class="form-check-label text-white" for="searchAll">
+                                        Search All (Category)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -188,13 +198,19 @@
             document.getElementById('searchForm').dispatchEvent(new Event('submit'));
         }
 
+        // Add logic to disable searchTerm input if searchAll is checked
+        document.getElementById('searchAll').addEventListener('change', function() {
+            document.getElementById('searchTerm').disabled = this.checked;
+        });
+
         document.getElementById('searchForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const searchTerm = document.getElementById('searchTerm').value.trim();
             const maxResults = document.getElementById('maxResults').value;
+            const searchAll = document.getElementById('searchAll').checked;
             
-            if (!searchTerm) {
+            if (!searchAll && !searchTerm) {
                 alert('Please enter a search term');
                 return;
             }
@@ -211,7 +227,8 @@
                 },
                 body: JSON.stringify({
                     search_term: searchTerm,
-                    max_results: parseInt(maxResults)
+                    max_results: parseInt(maxResults),
+                    search_all: searchAll
                 })
             })
             .then(response => response.json())

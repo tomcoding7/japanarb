@@ -21,3 +21,6 @@ urllib3==2.5.0
 websocket-client==1.8.0
 wheel==0.45.1
 wsproto==1.2.0
+# eBay API dependencies
+ebaysdk==2.2.0
+requests==2.31.0

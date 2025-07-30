@@ -8,7 +8,7 @@ An advanced arbitrage bot that analyzes Yu-Gi-Oh! card prices across multiple pl
 
 - **Buyee.jp**: Scrapes current Japanese auction listings
 - **130point.com/sales**: Analyzes recent eBay sold prices
-- **eBay**: Cross-references with additional sold listings
+- **eBay API**: Official eBay Finding API for sold listings and pricing data
 - **Real-time exchange rates**: Yen to USD conversion
 
 ### 📊 Advanced Arbitrage Scoring
@@ -41,11 +41,37 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. **Set up environment variables** (optional for LLM features):
+3. **Set up environment variables**:
 
 ```bash
 cp .env.example .env
-# Edit .env and add your OpenAI API key if using LLM features
+# Edit .env and add your API keys
+```
+
+### eBay API Setup
+
+To use the enhanced eBay API integration:
+
+1. **Get eBay API credentials**:
+   - Go to [eBay Developers](https://developer.ebay.com/)
+   - Create a new application
+   - Get your Client ID, Client Secret, and Dev ID
+
+2. **Configure environment variables**:
+```bash
+# eBay API Credentials
+EBAY_CLIENT_ID=your_app_id_here
+EBAY_CLIENT_SECRET=your_cert_id_here
+EBAY_DEV_ID=your_dev_id_here
+EBAY_REDIRECT_URI=http://localhost:3000/api/auth/ebay/callback
+
+# Environment (use 'sandbox' for testing, 'production' for live)
+EBAY_ENVIRONMENT=sandbox
+```
+
+3. **Test the eBay API integration**:
+```bash
+python test_ebay_api.py
 ```
 
 ## Usage
@@ -98,7 +124,7 @@ python test_arbitrage.py
 
 - **Buyee.jp scraping**: Uses undetected-chromedriver to avoid detection
 - **130point.com API**: Fetches recent eBay sold prices
-- **eBay scraping**: Additional price validation
+- **eBay API**: Official eBay Finding API for sold listings and pricing data
 - **Card identification**: Extracts card names and set codes
 
 ### 2. Price Analysis

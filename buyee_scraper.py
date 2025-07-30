@@ -1049,6 +1049,83 @@ class BuyeeScraper:
             logger.error(f"Error saving initial promising links: {str(e)}")
             logger.error(traceback.format_exc())
 
+    def get_category_urls(self, category_name: str) -> List[str]:
+        """
+        Get category URLs for a given category name.
+        This is a placeholder and should be adapted based on Buyee's site structure.
+        """
+        # Example: "yugioh" -> search for "yugioh" and find category links
+        # This is a simplified example. A real implementation would involve
+        # navigating the site's category structure.
+        base_search_url = f"{self.base_url}/item/search/query/{quote(category_name)}"
+        self.driver.get(base_search_url)
+        # Assuming category links are found in a specific part of the page
+        category_links = []
+        try:
+            links = self.driver.find_elements(By.CSS_SELECTOR, "a.category-link") # Placeholder selector
+            for link in links:
+                category_links.append(link.get_attribute('href'))
+        except Exception as e:
+            logger.error(f"Could not extract category links for {category_name}: {e}")
+        
+        if not category_links:
+            # Fallback to a constructed URL if no links are found
+            # This is a common pattern but might not match Buyee's exact structure
+            category_links.append(f"{self.base_url}/category/{quote(category_name)}")
+            
+        return category_links
+
+    def search_by_category(self, category_url: str) -> List[Dict[str, Any]]:
+        """Search for items in a given category URL."""
+        try:
+            logger.info(f"Starting category search for: {category_url}")
+            
+            # Check if driver is valid before starting
+            if not self.is_driver_valid():
+                logger.error("WebDriver is not valid and could not be recreated")
+                return []
+
+            self.driver.get(category_url)
+            self.handle_cookie_popup()
+            
+            all_items = []
+            page = 1
+            while page <= self.max_pages:
+                logger.info(f"Scraping page {page} of category {category_url}")
+                
+                item_summaries = self.get_item_summaries_from_search_page(page)
+                if not item_summaries:
+                    logger.info("No more items found in this category.")
+                    break
+                
+                for summary in item_summaries:
+                    # Here you can add more sophisticated filtering if needed
+                    detailed_info = self.process_item_summary(summary)
+                    if detailed_info:
+                        all_items.append(detailed_info)
+                        
+                if not self.has_next_page():
+                    logger.info("No next page found.")
+                    break
+                    
+                if not self.go_to_next_page():
+                    logger.info("Failed to go to the next page.")
+                    break
+                    
+                page += 1
+                
+            if all_items:
+                # Save results with a name derived from the category
+                category_name = category_url.strip("/").split("/")[-1]
+                self.save_results(all_items, f"category_{category_name}")
+            
+            return all_items
+            
+        except Exception as e:
+            logger.error(f"Error during category search for {category_url}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return []
+
     def search_items(self, search_term: str) -> List[Dict[str, Any]]:
         """Search for items and analyze them."""
         try:
@@ -1856,9 +1933,9 @@ class BuyeeScraper:
             logger.error(traceback.format_exc())
 
 def main():
-    parser = argparse.ArgumentParser(description='Scrape Buyee for Yu-Gi-Oh cards')
+    parser = argparse.ArgumentParser(description='Scrape Buyee for trading card categories')
     parser.add_argument('--output-dir', default='scraped_results', help='Directory to save results')
-    parser.add_argument('--max-pages', type=int, default=5, help='Maximum pages to scrape per search')
+    parser.add_argument('--max-pages', type=int, default=5, help='Maximum pages to scrape per category')
     parser.add_argument('--headless', action='store_true', help='Run in headless mode')
     parser.add_argument('--use-llm', action='store_true', help='Enable LLM analysis (requires OpenAI API key)')
     args = parser.parse_args()
@@ -1877,29 +1954,18 @@ def main():
             logger.error("Failed to establish connection. Exiting.")
             return
         
-        # Process each search term
-        for search_term in SEARCH_TERMS:
-            try:
-                # Check if driver is valid before each search
-                if not scraper.is_driver_valid():
-                    logger.error("WebDriver is not valid before starting search. Attempting to recreate...")
-                    if not scraper.is_driver_valid():  # Try one more time
-                        logger.error("Failed to recreate WebDriver. Skipping search term.")
-                        continue
-                
-                logger.info(f"Starting search for term: {search_term}")
-                results = scraper.search_items(search_term)
-                
+        # List of category names to crawl (can be expanded)
+        categories = ["yugioh"]
+        for category in categories:
+            logger.info(f"Getting category URLs for: {category}")
+            category_urls = scraper.get_category_urls(category)
+            for category_url in category_urls:
+                logger.info(f"Crawling category URL: {category_url}")
+                results = scraper.search_by_category(category_url)
                 if results:
-                    logger.info(f"Found {len(results)} valuable items for {search_term}")
+                    logger.info(f"Found {len(results)} items in category {category}")
                 else:
-                    logger.info(f"No valuable items found for {search_term}")
-                    
-            except Exception as e:
-                logger.error(f"Error processing search term {search_term}: {str(e)}")
-                logger.error(traceback.format_exc())
-                continue
-                
+                    logger.info(f"No items found in category {category}")
     except Exception as e:
         logger.error(f"Fatal error in main: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1910,5 +1976,5 @@ def main():
             except Exception as e:
                 logger.error(f"Error during cleanup: {str(e)}")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 
