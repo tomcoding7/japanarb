@@ -109,7 +109,7 @@ class WebArbitrageInterface:
         return filtered
     
     def get_stats(self) -> Dict:
-        """Get summary statistics"""
+        """Get summary statistics - optimized for large datasets"""
         if not self.results:
             return {
                 'total_listings': 0,
@@ -122,18 +122,62 @@ class WebArbitrageInterface:
                 'total_profit_potential': 0
             }
         
-        df = pd.DataFrame(self.results)
-        
-        return {
-            'total_listings': len(df),
-            'profitable_listings': len(df[df['profit_margin'] > 0]),
-            'strong_buys': len(df[df['recommended_action'] == 'STRONG BUY']),
-            'buys': len(df[df['recommended_action'] == 'BUY']),
-            'considers': len(df[df['recommended_action'] == 'CONSIDER']),
-            'avg_score': round(df['arbitrage_score'].mean(), 2),
-            'avg_profit_margin': round(df['profit_margin'].mean(), 2),
-            'total_profit_potential': round(df['profit_margin'].sum(), 2)
-        }
+        try:
+            # Use direct iteration instead of pandas for better performance
+            total_listings = len(self.results)
+            profitable_count = 0
+            strong_buys = 0
+            buys = 0
+            considers = 0
+            total_score = 0
+            total_profit = 0
+            valid_scores = 0
+            valid_profits = 0
+            
+            for result in self.results:
+                # Safe extraction with defaults
+                profit_margin = result.get('profit_margin', 0)
+                if isinstance(profit_margin, (int, float)) and profit_margin > 0:
+                    profitable_count += 1
+                    total_profit += profit_margin
+                    valid_profits += 1
+                
+                action = result.get('recommended_action', '')
+                if action == 'STRONG BUY':
+                    strong_buys += 1
+                elif action == 'BUY':
+                    buys += 1
+                elif action == 'CONSIDER':
+                    considers += 1
+                
+                score = result.get('arbitrage_score', 0)
+                if isinstance(score, (int, float)) and score > 0:
+                    total_score += score
+                    valid_scores += 1
+            
+            return {
+                'total_listings': total_listings,
+                'profitable_listings': profitable_count,
+                'strong_buys': strong_buys,
+                'buys': buys,
+                'considers': considers,
+                'avg_score': round(total_score / valid_scores, 2) if valid_scores > 0 else 0,
+                'avg_profit_margin': round(total_profit / valid_profits, 2) if valid_profits > 0 else 0,
+                'total_profit_potential': round(total_profit, 2)
+            }
+        except Exception as e:
+            logger.error(f"Error calculating stats: {e}")
+            # Return safe defaults if calculation fails
+            return {
+                'total_listings': len(self.results),
+                'profitable_listings': 0,
+                'strong_buys': 0,
+                'buys': 0,
+                'considers': 0,
+                'avg_score': 0,
+                'avg_profit_margin': 0,
+                'total_profit_potential': 0
+            }
 
 # Global interface instance
 interface = WebArbitrageInterface()
@@ -152,14 +196,30 @@ def auto_search_loop(interface, interval_minutes=60):
         logger.info(f"[AutoSearch] Sleeping for {interval_minutes} minutes...")
         time.sleep(interval_minutes * 60)
 
-# Start auto-search in background after interface is created
-threading.Thread(target=auto_search_loop, args=(interface, 60), daemon=True).start()
+# Auto-search disabled on startup to prevent resource conflicts
+# Uncomment the line below to enable auto-search (not recommended for development)
+# threading.Thread(target=auto_search_loop, args=(interface, 60), daemon=True).start()
 
 @app.route('/')
 def index():
     """Main dashboard page"""
-    stats = interface.get_stats()
-    return render_template('dashboard.html', stats=stats)
+    try:
+        stats = interface.get_stats()
+        return render_template('dashboard.html', stats=stats)
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        # Return basic stats if there's an error
+        basic_stats = {
+            'total_listings': 0,
+            'profitable_listings': 0,
+            'strong_buys': 0,
+            'buys': 0,
+            'considers': 0,
+            'avg_score': 0,
+            'avg_profit_margin': 0,
+            'total_profit_potential': 0
+        }
+        return render_template('dashboard.html', stats=basic_stats)
 
 @app.route('/search')
 def search_page():

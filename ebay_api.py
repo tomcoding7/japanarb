@@ -13,8 +13,44 @@ from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from datetime import datetime, timedelta
 import time
+import re
 
 logger = logging.getLogger(__name__)
+
+# Comprehensive card name translations
+CARD_TRANSLATIONS = {
+    "ブラック・マジシャン": "Dark Magician",
+    "青眼の白龍": "Blue-Eyes White Dragon", 
+    "ブラック・マジシャン・ガール": "Dark Magician Girl",
+    "魔術師の弟子": "Dark Magician Girl",
+    "レッドアイズ・ブラック・ドラゴン": "Red-Eyes Black Dragon",
+    "エクゾディア": "Exodia",
+    "カオス・ソルジャー": "Black Luster Soldier",
+    "カオス・エンペラー・ドラゴン": "Chaos Emperor Dragon",
+    "サイバー・ドラゴン": "Cyber Dragon",
+    "エレメンタル・ヒーロー": "Elemental Hero",
+    "デステニー・ヒーロー": "Destiny Hero",
+    "ネオス": "Neos",
+    "スターダスト・ドラゴン": "Stardust Dragon",
+    "ブラックローズ・ドラゴン": "Black Rose Dragon",
+    "アーカナイト・マジシャン": "Arcanite Magician",
+    "アマダ": "Amada",
+    "遊戯王": "Yu-Gi-Oh",
+    "ホロ": "holographic",
+    "ウルトラレア": "Ultra Rare",
+    "スーパーレア": "Super Rare", 
+    "シークレット": "Secret Rare",
+    "1st": "1st Edition",
+    "初版": "1st Edition",
+    "無制限": "Unlimited",
+    "ミント": "Mint",
+    "ニアミント": "Near Mint",
+    "エクセレント": "Excellent",
+    "グッド": "Good",
+    "ライトプレイ": "Light Played",
+    "プレイ": "Played",
+    "プア": "Poor"
+}
 
 class EbayAPI:
     """eBay API integration for fetching sold listings and pricing data."""
@@ -55,6 +91,106 @@ class EbayAPI:
             else:
                 logger.warning("Make sure EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_DEV_ID are set")
     
+    def smart_translate_for_ebay(self, japanese_title: str) -> List[str]:
+        """
+        Create multiple search strategies for Japanese card titles.
+        
+        Args:
+            japanese_title: Japanese card title
+            
+        Returns:
+            List of search queries to try
+        """
+        search_queries = []
+        
+        # Strategy 1: Direct Japanese search
+        search_queries.append(japanese_title)
+        
+        # Strategy 2: English translation search
+        english_title = self._translate_card_name(japanese_title)
+        if english_title != japanese_title:
+            search_queries.append(english_title)
+            search_queries.append(f"Yu-Gi-Oh {english_title}")
+        
+        # Strategy 3: Card name extraction + "Yu-Gi-Oh"
+        card_name = self._extract_card_name(japanese_title)
+        if card_name:
+            search_queries.append(f"Yu-Gi-Oh {card_name}")
+            search_queries.append(f"Yu-Gi-Oh card {card_name}")
+        
+        # Strategy 4: Set codes and rarity search
+        set_info = self._extract_set_info(japanese_title)
+        if set_info:
+            search_queries.append(f"Yu-Gi-Oh {set_info}")
+        
+        # Strategy 5: Generic Yu-Gi-Oh search with key terms
+        key_terms = self._extract_key_terms(japanese_title)
+        if key_terms:
+            search_queries.append(f"Yu-Gi-Oh {' '.join(key_terms)}")
+        
+        # Remove duplicates and empty strings
+        search_queries = list(set([q.strip() for q in search_queries if q.strip()]))
+        
+        logger.info(f"Generated {len(search_queries)} search queries for: {japanese_title}")
+        for i, query in enumerate(search_queries):
+            logger.debug(f"  Query {i+1}: {query}")
+        
+        return search_queries
+    
+    def _translate_card_name(self, japanese_title: str) -> str:
+        """Translate Japanese card name to English using dictionary."""
+        translated = japanese_title
+        
+        # Apply direct translations
+        for jp_name, en_name in CARD_TRANSLATIONS.items():
+            if jp_name in japanese_title:
+                translated = translated.replace(jp_name, en_name)
+        
+        return translated
+    
+    def _extract_card_name(self, title: str) -> Optional[str]:
+        """Extract card name from title."""
+        # Look for common card name patterns
+        card_patterns = [
+            r'([A-Za-z\s]+)(?:\s*[-・]\s*[A-Za-z\s]+)*',  # English card names
+            r'([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+)',  # Japanese characters
+        ]
+        
+        for pattern in card_patterns:
+            match = re.search(pattern, title)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def _extract_set_info(self, title: str) -> Optional[str]:
+        """Extract set information from title."""
+        # Look for set codes like LOB, MRD, etc.
+        set_pattern = r'([A-Z]{2,4})[-・]?(\d{3})'
+        match = re.search(set_pattern, title)
+        if match:
+            return f"{match.group(1)} {match.group(2)}"
+        
+        return None
+    
+    def _extract_key_terms(self, title: str) -> List[str]:
+        """Extract key terms for search."""
+        terms = []
+        
+        # Extract rarity terms
+        rarity_terms = ['ウルトラレア', 'スーパーレア', 'シークレット', 'ホロ', '1st', '初版']
+        for term in rarity_terms:
+            if term in title:
+                terms.append(CARD_TRANSLATIONS.get(term, term))
+        
+        # Extract condition terms
+        condition_terms = ['ミント', 'ニアミント', 'エクセレント', 'グッド']
+        for term in condition_terms:
+            if term in title:
+                terms.append(CARD_TRANSLATIONS.get(term, term))
+        
+        return terms
+
     def authenticate(self) -> bool:
         """Authenticate with eBay API using Client Credentials flow."""
         try:
@@ -97,6 +233,63 @@ class EbayAPI:
         credentials = f"{self.client_id}:{self.client_secret}"
         return base64.b64encode(credentials.encode()).decode()
     
+    def search_sold_items_comprehensive(self, japanese_title: str, category_id: str = "31388", max_results: int = 50) -> List[Dict[str, Any]]:
+        """
+        Comprehensive search for sold items using multiple strategies.
+        
+        Args:
+            japanese_title: Japanese card title
+            category_id: eBay category ID (31388 = Trading Cards)
+            max_results: Maximum number of results to return
+            
+        Returns:
+            List of sold item data
+        """
+        if not self.authenticate():
+            logger.error("eBay API authentication failed")
+            return []
+        
+        all_items = []
+        search_queries = self.smart_translate_for_ebay(japanese_title)
+        
+        for query in search_queries:
+            try:
+                logger.info(f"Searching eBay with query: {query}")
+                
+                # Try Browse API first
+                items = self._search_browse_api(query, category_id, max_results)
+                
+                # If Browse API fails, try Finding API as fallback
+                if not items:
+                    logger.info(f"Browse API failed for '{query}', trying Finding API fallback")
+                    items = self._search_finding_api(query, category_id, max_results)
+                
+                # If both APIs fail, try web scraping fallback
+                if not items:
+                    logger.info(f"Both APIs failed for '{query}', trying web scraping fallback")
+                    items = self._search_web_scraping(query, max_results)
+                
+                all_items.extend(items)
+                
+                # Add delay to avoid rate limiting
+                time.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"Error searching with query '{query}': {str(e)}")
+                continue
+        
+        # Remove duplicates based on item_id
+        unique_items = {}
+        for item in all_items:
+            item_id = item.get('item_id', '')
+            if item_id and item_id not in unique_items:
+                unique_items[item_id] = item
+        
+        final_items = list(unique_items.values())
+        logger.info(f"Found {len(final_items)} unique sold items for '{japanese_title}'")
+        
+        return final_items
+
     def search_sold_items(self, query: str, category_id: str = "31388", max_results: int = 50) -> List[Dict[str, Any]]:
         """
         Search for sold items using eBay Browse API with fallback to Finding API.
@@ -198,8 +391,10 @@ class EbayAPI:
             root = ET.fromstring(response.text)
             
             items = []
-            for item in root.findall('.//{http://www.ebay.com/marketplace/search/v1/services}item'):
-                item_data = self._parse_item_xml(item)
+            
+            # Parse XML response
+            for item_elem in root.findall('.//{http://www.ebay.com/marketplace/search/v1/services}item'):
+                item_data = self._parse_item_xml(item_elem)
                 if item_data:
                     items.append(item_data)
             
@@ -210,48 +405,113 @@ class EbayAPI:
             logger.warning(f"Finding API failed: {str(e)}")
             return []
     
+    def _search_web_scraping(self, query: str, max_results: int) -> List[Dict[str, Any]]:
+        """Fallback web scraping method for eBay searches."""
+        try:
+            from urllib.parse import quote
+            from bs4 import BeautifulSoup
+            
+            # Construct eBay search URL
+            search_url = f"https://www.ebay.com/sch/i.html?_nkw={quote(query)}&_sacat=0&LH_Sold=1&LH_Complete=1"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(search_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            items = []
+            
+            # Find all sold items
+            item_elements = soup.find_all('div', class_='s-item__info')
+            
+            for item_elem in item_elements[:max_results]:
+                try:
+                    # Extract price
+                    price_elem = item_elem.find('span', class_='s-item__price')
+                    if not price_elem:
+                        continue
+                    
+                    price_text = price_elem.text.strip()
+                    price_match = re.search(r'[\d,]+\.?\d*', price_text)
+                    if not price_match:
+                        continue
+                    
+                    price = Decimal(price_match.group().replace(',', ''))
+                    
+                    # Extract title
+                    title_elem = item_elem.find('div', class_='s-item__title')
+                    title = title_elem.text.strip() if title_elem else "Unknown"
+                    
+                    # Extract item ID
+                    item_id = ""
+                    link_elem = item_elem.find('a', class_='s-item__link')
+                    if link_elem and 'href' in link_elem.attrs:
+                        href = link_elem['href']
+                        id_match = re.search(r'/itm/(\d+)', href)
+                        if id_match:
+                            item_id = id_match.group(1)
+                    
+                    item_data = {
+                        'item_id': item_id,
+                        'title': title,
+                        'price': price,
+                        'condition': 'Unknown',
+                        'end_time': '',
+                        'currency': 'USD'
+                    }
+                    
+                    items.append(item_data)
+                    
+                except Exception as e:
+                    logger.debug(f"Error parsing eBay item: {str(e)}")
+                    continue
+            
+            logger.info(f"Web scraping found {len(items)} items for query: {query}")
+            return items
+            
+        except Exception as e:
+            logger.warning(f"Web scraping failed: {str(e)}")
+            return []
+
     def _search_shopping_api(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Search using Shopping API as fallback."""
+        """Search using Shopping API."""
         try:
             headers = {
                 'Authorization': f'Bearer {self.access_token}',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/xml'
             }
             
-            # Use Shopping API to search for items
-            params = {
-                'callname': 'FindItems',
-                'responseformat': 'JSON',
-                'keywords': query,
-                'categoryId': '31388',  # Trading Cards
-                'sortOrder': 'EndTimeSoonest',
-                'paginationInput.entriesPerPage': max_results,
-                'paginationInput.pageNumber': '1',
-                'itemFilter(0).name': 'SoldItemsOnly',
-                'itemFilter(0).value': 'true'
-            }
+            xml_request = f"""<?xml version="1.0" encoding="UTF-8"?>
+<findItemsAdvancedRequest xmlns="http://www.ebay.com/marketplace/search/v1/services">
+    <keywords>{query}</keywords>
+    <sortOrder>EndTimeSoonest</sortOrder>
+    <paginationInput>
+        <entriesPerPage>{max_results}</entriesPerPage>
+        <pageNumber>1</pageNumber>
+    </paginationInput>
+    <itemFilter>
+        <name>SoldItemsOnly</name>
+        <value>true</value>
+    </itemFilter>
+</findItemsAdvancedRequest>"""
             
-            response = requests.get(self.shopping_url, headers=headers, params=params)
+            response = requests.post(self.shopping_url, headers=headers, data=xml_request)
             response.raise_for_status()
             
-            data = response.json()
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.text)
+            
             items = []
             
-            if 'findItemsAdvancedResponse' in data:
-                search_result = data['findItemsAdvancedResponse'][0]
-                if 'searchResult' in search_result and search_result['searchResult']:
-                    for item in search_result['searchResult'][0].get('item', []):
-                        item_data = {
-                            'item_id': item.get('itemId', ''),
-                            'title': item.get('title', ''),
-                            'price': Decimal(item.get('sellingStatus', [{}])[0].get('currentPrice', [{}])[0].get('__value__', '0')),
-                            'condition': item.get('condition', [{}])[0].get('conditionDisplayName', 'Unknown'),
-                            'end_time': item.get('listingInfo', [{}])[0].get('endTime', ''),
-                            'currency': 'USD'
-                        }
-                        items.append(item_data)
+            # Parse XML response
+            for item_elem in root.findall('.//{http://www.ebay.com/marketplace/search/v1/services}item'):
+                item_data = self._parse_item_xml(item_elem)
+                if item_data:
+                    items.append(item_data)
             
-            logger.info(f"Shopping API found {len(items)} items for query: {query}")
             return items
             
         except Exception as e:
@@ -259,26 +519,24 @@ class EbayAPI:
             return []
     
     def _parse_item_xml(self, item_elem) -> Optional[Dict[str, Any]]:
-        """Parse individual item XML element."""
+        """Parse item XML element from eBay API response."""
         try:
-            namespace = '{http://www.ebay.com/marketplace/search/v1/services}'
+            item_id = item_elem.find('.//itemId')
+            title = item_elem.find('.//title')
+            price = item_elem.find('.//sellingStatus//currentPrice')
+            condition = item_elem.find('.//condition')
+            end_time = item_elem.find('.//listingInfo//endTime')
             
-            item_id = item_elem.find(f'{namespace}itemId')
-            title = item_elem.find(f'{namespace}title')
-            current_price = item_elem.find(f'{namespace}sellingStatus/{namespace}currentPrice')
-            condition = item_elem.find(f'{namespace}condition/{namespace}conditionDisplayName')
-            end_time = item_elem.find(f'{namespace}listingInfo/{namespace}endTime')
-            
-            if not item_id or not current_price:
+            if not item_id or not title or not price:
                 return None
             
             return {
                 'item_id': item_id.text,
-                'title': title.text if title is not None else '',
-                'price': Decimal(current_price.text),
-                'condition': condition.text if condition is not None else 'Unknown',
-                'end_time': end_time.text if end_time is not None else '',
-                'currency': current_price.get('currencyId', 'USD')
+                'title': title.text,
+                'price': Decimal(price.text),
+                'condition': condition.text if condition else 'Unknown',
+                'end_time': end_time.text if end_time else '',
+                'currency': price.get('currencyId', 'USD')
             }
             
         except Exception as e:
@@ -286,15 +544,7 @@ class EbayAPI:
             return None
     
     def get_item_details(self, item_ids: List[str]) -> List[Dict[str, Any]]:
-        """
-        Get detailed information for specific items using Shopping API.
-        
-        Args:
-            item_ids: List of eBay item IDs
-            
-        Returns:
-            List of detailed item information
-        """
+        """Get detailed information for specific items."""
         if not self.authenticate():
             return []
         
@@ -304,52 +554,53 @@ class EbayAPI:
                 'Content-Type': 'application/xml'
             }
             
-            # Build XML request
-            item_ids_str = ','.join(item_ids)
+            # Build XML request for multiple items
+            items_xml = ''.join([f'<itemId>{item_id}</itemId>' for item_id in item_ids])
             xml_request = f"""<?xml version="1.0" encoding="UTF-8"?>
-<GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-    <ItemID>{item_ids_str}</ItemID>
-    <DetailLevel>ReturnAll</DetailLevel>
-</GetMultipleItemsRequest>"""
+<getMultipleItemsRequest xmlns="http://www.ebay.com/marketplace/search/v1/services">
+    <itemId>{items_xml}</itemId>
+    <includeSelector>Details</includeSelector>
+</getMultipleItemsRequest>"""
             
             response = requests.post(self.shopping_url, headers=headers, data=xml_request)
             response.raise_for_status()
             
-            # Parse response
             import xml.etree.ElementTree as ET
             root = ET.fromstring(response.text)
             
             items = []
-            for item in root.findall('.//{urn:ebay:apis:eBLBaseComponents}Item'):
-                item_data = self._parse_detail_xml(item)
+            
+            # Parse XML response
+            for item_elem in root.findall('.//{http://www.ebay.com/marketplace/search/v1/services}item'):
+                item_data = self._parse_detail_xml(item_elem)
                 if item_data:
                     items.append(item_data)
             
             return items
             
         except Exception as e:
-            logger.error(f"Failed to get item details: {str(e)}")
+            logger.error(f"Error getting item details: {str(e)}")
             return []
     
     def _parse_detail_xml(self, item_elem) -> Optional[Dict[str, Any]]:
         """Parse detailed item XML element."""
         try:
-            namespace = '{urn:ebay:apis:eBLBaseComponents}'
+            item_id = item_elem.find('.//itemId')
+            title = item_elem.find('.//title')
+            price = item_elem.find('.//currentPrice')
+            condition = item_elem.find('.//condition')
+            description = item_elem.find('.//description')
             
-            item_id = item_elem.find(f'{namespace}ItemID')
-            title = item_elem.find(f'{namespace}Title')
-            condition = item_elem.find(f'{namespace}ConditionDisplayName')
-            price = item_elem.find(f'{namespace}ConvertedCurrentPrice')
-            
-            if not item_id:
+            if not item_id or not title:
                 return None
             
             return {
                 'item_id': item_id.text,
-                'title': title.text if title is not None else '',
-                'condition': condition.text if condition is not None else 'Unknown',
-                'price': Decimal(price.text) if price is not None else Decimal('0'),
-                'currency': price.get('currencyID', 'USD') if price is not None else 'USD'
+                'title': title.text,
+                'price': Decimal(price.text) if price else Decimal('0'),
+                'condition': condition.text if condition else 'Unknown',
+                'description': description.text if description else '',
+                'currency': price.get('currencyId', 'USD') if price else 'USD'
             }
             
         except Exception as e:
@@ -358,25 +609,17 @@ class EbayAPI:
     
     def get_card_prices(self, card_name: str, set_code: Optional[str] = None) -> Dict[str, List[Decimal]]:
         """
-        Get eBay sold prices for a Yu-Gi-Oh! card.
+        Get eBay sold prices for a Yu-Gi-Oh! card using comprehensive search.
         
         Args:
-            card_name: Name of the card
+            card_name: Name of the card (can be Japanese)
             set_code: Optional set code (e.g., "LOB", "MRD")
             
         Returns:
             Dictionary with 'raw' and 'psa' price lists
         """
-        # Build search query
-        search_query = card_name
-        if set_code:
-            search_query += f" {set_code}"
-        
-        # Add Yu-Gi-Oh! context
-        search_query += " Yu-Gi-Oh!"
-        
-        # Search for sold items
-        sold_items = self.search_sold_items(search_query, max_results=100)
+        # Use comprehensive search for Japanese card names
+        sold_items = self.search_sold_items_comprehensive(card_name, max_results=100)
         
         raw_prices = []
         psa_prices = []
@@ -391,6 +634,8 @@ class EbayAPI:
                 psa_prices.append(price)
             else:
                 raw_prices.append(price)
+        
+        logger.info(f"Found {len(raw_prices)} raw and {len(psa_prices)} PSA prices for {card_name}")
         
         return {
             'raw': raw_prices,
@@ -448,8 +693,8 @@ if __name__ == "__main__":
     if ebay.authenticate():
         print("✅ eBay API authentication successful")
         
-        # Test search
-        results = ebay.search_sold_items("Blue-Eyes White Dragon", max_results=5)
+        # Test comprehensive search
+        results = ebay.search_sold_items_comprehensive("ブラック・マジシャン", max_results=5)
         print(f"Found {len(results)} sold items")
         
         for item in results:

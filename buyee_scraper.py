@@ -1297,15 +1297,12 @@ class BuyeeScraper:
                     description = "No description available"
                     logger.warning(f"No description found for item: {url}")
                 
-                # Extract images with retry logic
-                images = []
-                try:
-                    image_elements = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.itemImage img"))
-                    )
-                    images = [img.get_attribute('src') for img in image_elements if img.get_attribute('src')]
-                except TimeoutException:
+                # Extract images with comprehensive fallback logic
+                images = self.extract_images_comprehensive()
+                if not images:
                     logger.warning(f"No images found for item: {url}")
+                else:
+                    logger.info(f"Found {len(images)} images for item: {url}")
                 
                 # Extract seller information
                 try:
@@ -1931,6 +1928,124 @@ class BuyeeScraper:
         except Exception as e:
             logger.error(f"Error saving bookmarked items: {str(e)}")
             logger.error(traceback.format_exc())
+    
+    def extract_images_comprehensive(self) -> List[str]:
+        """
+        Comprehensive image extraction with multiple fallback strategies.
+        
+        Returns:
+            List of image URLs found on the page
+        """
+        images = []
+        
+        # Strategy 1: Main product image selectors
+        main_image_selectors = [
+            "div.itemImage img",
+            ".product-image img",
+            ".main-image img",
+            ".item-photo img",
+            ".product-photo img",
+            "img[alt*='product']",
+            "img[alt*='item']",
+            ".item-detail-image img",
+            ".product-detail-image img"
+        ]
+        
+        for selector in main_image_selectors:
+            try:
+                image_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                for img in image_elements:
+                    src = img.get_attribute('src')
+                    if src and src not in images:
+                        images.append(src)
+                        logger.debug(f"Found image with selector '{selector}': {src}")
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {str(e)}")
+                continue
+        
+        # Strategy 2: Look for images with specific attributes
+        try:
+            # Images with data-src (lazy loading)
+            lazy_images = self.driver.find_elements(By.CSS_SELECTOR, "img[data-src]")
+            for img in lazy_images:
+                src = img.get_attribute('data-src')
+                if src and src not in images:
+                    images.append(src)
+                    logger.debug(f"Found lazy-loaded image: {src}")
+        except Exception as e:
+            logger.debug(f"Lazy image extraction failed: {str(e)}")
+        
+        # Strategy 3: Look for images in specific containers
+        container_selectors = [
+            ".image-container img",
+            ".photo-container img",
+            ".gallery img",
+            ".slideshow img",
+            ".carousel img"
+        ]
+        
+        for selector in container_selectors:
+            try:
+                container_images = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                for img in container_images:
+                    src = img.get_attribute('src') or img.get_attribute('data-src')
+                    if src and src not in images:
+                        images.append(src)
+                        logger.debug(f"Found image in container '{selector}': {src}")
+            except Exception as e:
+                logger.debug(f"Container selector '{selector}' failed: {str(e)}")
+                continue
+        
+        # Strategy 4: Look for images with specific patterns in src
+        try:
+            all_images = self.driver.find_elements(By.TAG_NAME, "img")
+            for img in all_images:
+                src = img.get_attribute('src')
+                if src and any(pattern in src.lower() for pattern in ['product', 'item', 'image', 'photo', 'pic']):
+                    if src not in images:
+                        images.append(src)
+                        logger.debug(f"Found image with product pattern: {src}")
+        except Exception as e:
+            logger.debug(f"Pattern-based image extraction failed: {str(e)}")
+        
+        # Strategy 5: Look for images with reasonable sizes (likely product images)
+        try:
+            all_images = self.driver.find_elements(By.TAG_NAME, "img")
+            for img in all_images:
+                src = img.get_attribute('src')
+                if not src or src in images:
+                    continue
+                
+                # Check if image has reasonable dimensions
+                width = img.get_attribute('width')
+                height = img.get_attribute('height')
+                
+                if width and height:
+                    try:
+                        w, h = int(width), int(height)
+                        # Product images are typically larger than icons/thumbnails
+                        if w >= 100 and h >= 100:
+                            images.append(src)
+                            logger.debug(f"Found image with good dimensions ({w}x{h}): {src}")
+                    except ValueError:
+                        continue
+        except Exception as e:
+            logger.debug(f"Size-based image extraction failed: {str(e)}")
+        
+        # Filter out common non-product images
+        filtered_images = []
+        exclude_patterns = [
+            'logo', 'icon', 'avatar', 'banner', 'ad', 'advertisement',
+            'social', 'facebook', 'twitter', 'instagram', 'youtube',
+            'analytics', 'tracking', 'pixel', 'beacon'
+        ]
+        
+        for img_url in images:
+            if not any(pattern in img_url.lower() for pattern in exclude_patterns):
+                filtered_images.append(img_url)
+        
+        logger.info(f"Extracted {len(filtered_images)} product images from {len(images)} total images")
+        return filtered_images
 
 def main():
     parser = argparse.ArgumentParser(description='Scrape Buyee for trading card categories')

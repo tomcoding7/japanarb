@@ -27,6 +27,7 @@ from urllib.parse import quote
 # Import our existing utilities
 from scraper_utils import PriceAnalyzer, CardInfoExtractor
 from ebay_api import EbayAPI
+from card_translator import CardTranslator
 
 # Set up logging
 logging.basicConfig(
@@ -79,12 +80,12 @@ class CardArbitrageTool:
         # Initialize eBay API
         self.ebay_api = EbayAPI()
         
+        # Initialize card translator
+        self.card_translator = CardTranslator()
+        
         # Setup webdriver
         self.driver = None
         self.setup_driver()
-        
-        # Initialize translator
-        # Translation removed for simplicity
         
         # Exchange rate (should be updated regularly)
         self.yen_to_usd = Decimal('0.0067')
@@ -119,10 +120,13 @@ class CardArbitrageTool:
             logger.warning("WebDriver setup failed - scraping will not work")
 
     def translate_text(self, text: str) -> str:
-        """Simple text translation - returns original text for now."""
-        # For now, just return the original text
-        # Translation can be added later if needed
-        return text
+        """Translate Japanese text to English using the card translator."""
+        try:
+            translation_result = self.card_translator.translate_card_title(text)
+            return translation_result['translated']
+        except Exception as e:
+            logger.error(f"Translation error: {str(e)}")
+            return text
 
     def extract_card_id(self, title: str) -> Optional[str]:
         """Extract card ID from title."""
@@ -141,15 +145,20 @@ class CardArbitrageTool:
         return None
 
     def get_ebay_prices(self, card_name: str, set_code: Optional[str] = None) -> Dict[str, List[Decimal]]:
-        """Get eBay sold prices for a card using the eBay API."""
+        """Get eBay sold prices for a card using the comprehensive eBay API."""
         try:
-            # Use the eBay API to get card prices
+            # Use the comprehensive eBay API to get card prices
             prices = self.ebay_api.get_card_prices(card_name, set_code)
             
             # Log the results
             raw_count = len(prices['raw'])
             psa_count = len(prices['psa'])
             logger.info(f"eBay API found {raw_count} raw and {psa_count} PSA listings for {card_name}")
+            
+            # If no results found, try fallback
+            if raw_count == 0 and psa_count == 0:
+                logger.warning(f"No eBay results found for {card_name}, trying fallback")
+                return self._get_ebay_prices_fallback(card_name, set_code)
             
             return prices
             
@@ -458,7 +467,23 @@ class CardArbitrageTool:
                     title = item.find_element(By.CSS_SELECTOR, "div.itemCard__itemName").text.strip()
                     price_text = item.find_element(By.CSS_SELECTOR, ".itemCard__itemInfo .g-price").text.strip()
                     price_yen = Decimal(re.sub(r'[^\d.]', '', price_text))
-                    image_url = item.find_element(By.CSS_SELECTOR, "img").get_attribute("src")
+                    # Extract image URL with fallback
+                    image_url = ""
+                    try:
+                        img_element = item.find_element(By.CSS_SELECTOR, "img")
+                        image_url = img_element.get_attribute("src") or img_element.get_attribute("data-src")
+                        if not image_url:
+                            # Try alternative selectors
+                            for selector in ["img[src]", "img[data-src]", ".item-image img", ".product-image img"]:
+                                try:
+                                    alt_img = item.find_element(By.CSS_SELECTOR, selector)
+                                    image_url = alt_img.get_attribute("src") or alt_img.get_attribute("data-src")
+                                    if image_url:
+                                        break
+                                except:
+                                    continue
+                    except Exception as e:
+                        logger.debug(f"Could not extract image URL: {str(e)}")
                     listing_url = item.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
                     
                     # Get condition if available
@@ -470,8 +495,11 @@ class CardArbitrageTool:
                     # Translate title
                     title_en = self.translate_text(title)
                     
-                    # Extract card info
-                    card_name, set_code, region = self.card_extractor.extract_card_info(title)
+                    # Extract card info using the new translator
+                    translation_result = self.card_translator.translate_card_title(title)
+                    card_name = translation_result['card_name']
+                    set_code = translation_result['set_code']
+                    region = translation_result['region']
                     
                     # Create listing object
                     listing = CardListing(
