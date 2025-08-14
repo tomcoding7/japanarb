@@ -458,7 +458,24 @@ class CardArbitrageTool:
                     title = item.find_element(By.CSS_SELECTOR, "div.itemCard__itemName").text.strip()
                     price_text = item.find_element(By.CSS_SELECTOR, ".itemCard__itemInfo .g-price").text.strip()
                     price_yen = Decimal(re.sub(r'[^\d.]', '', price_text))
-                    image_url = item.find_element(By.CSS_SELECTOR, "img").get_attribute("src")
+                    # Try multiple selectors for image URL
+                    image_url = None
+                    image_selectors = [
+                        "img.lazyLoadV2.g-thumbnail__image",
+                        "img.g-thumbnail__image",
+                        "img[class*='thumbnail']",
+                        "img"
+                    ]
+                    
+                    for selector in image_selectors:
+                        try:
+                            img_element = item.find_element(By.CSS_SELECTOR, selector)
+                            src = img_element.get_attribute("src") or img_element.get_attribute("data-src")
+                            if src and 'noimage' not in src.lower() and 'placeholder' not in src.lower():
+                                image_url = src
+                                break
+                        except NoSuchElementException:
+                            continue
                     listing_url = item.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
                     
                     # Get condition if available

@@ -1481,20 +1481,35 @@ class BuyeeScraper:
                     # Extract thumbnail URL
                     thumbnail_url = None
                     thumbnail_selectors = [
+                        "img.lazyLoadV2.g-thumbnail__image",
                         "img[data-testid='item-card-image']",
                         "div.itemCard__image img",
                         "div.item-image img",
-                        "img.item-image"
+                        "img.item-image",
+                        "img.g-thumbnail__image",
+                        "img[class*='thumbnail']"
                     ]
                     
                     for selector in thumbnail_selectors:
                         try:
                             img_element = card.find_element(By.CSS_SELECTOR, selector)
                             thumbnail_url = img_element.get_attribute('src') or img_element.get_attribute('data-src')
-                            if thumbnail_url:
+                            if thumbnail_url and 'noimage' not in thumbnail_url.lower():
                                 break
                         except NoSuchElementException:
                             continue
+                    
+                    # If no thumbnail found, try to find any image in the card
+                    if not thumbnail_url:
+                        try:
+                            all_images = card.find_elements(By.CSS_SELECTOR, "img")
+                            for img in all_images:
+                                src = img.get_attribute('src') or img.get_attribute('data-src')
+                                if src and 'noimage' not in src.lower() and 'placeholder' not in src.lower():
+                                    thumbnail_url = src
+                                    break
+                        except Exception:
+                            pass
                     
                     # Log basic info
                     logger.info(f"Item {i+1}/{len(card_elements)}:")

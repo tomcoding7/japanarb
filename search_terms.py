@@ -1,37 +1,62 @@
-# List of search terms for various trading cards
+# Japanese search terms for profitable collectible cards
 SEARCH_TERMS = [
-    # Yu-Gi-Oh specific terms
-    "遊戯王 アジア",  # Yu-Gi-Oh Asian English cards
-    "遊戯王 GB 特典カード",  # Yu-Gi-Oh GB promo cards
-    "遊戯王 週刊少年ジャンプ付録",  # Yu-Gi-Oh Weekly Shonen Jump promos
-    "遊戯王 dm1",  # Yu-Gi-Oh DM1
-    "遊戯王 東映",  # Yu-Gi-Oh Toei
-    "遊戯王 バンダイ",  # Yu-Gi-Oh Bandai
-    "遊戯王 ダンジョン",  # Yu-Gi-Oh Dungeon
-    "遊戯王 英語",  # Yu-Gi-Oh English
-    "遊戯王 ダンジョンダイスモンスターズ",  # Yu-Gi-Oh Dungeon Dice Monsters
-    "遊戯王",  # Yu-Gi-Oh general
-    "ブラック・マジシャン",  # Dark Magician
-    "青眼の白龍",  # Blue-Eyes White Dragon
-    "アマダ 遊戯王",  # Amada Yu-Gi-Oh
+    # Yu-Gi-Oh! (遊戯王) - High value terms
+    "遊戯王 初期 美品",  # Yu-Gi-Oh early mint condition
+    "遊戯王 レリーフ",  # Yu-Gi-Oh relief/ultimate rare
+    "遊戯王 シークレット 1st",  # Yu-Gi-Oh secret rare 1st edition
+    "遊戯王 プリズマティック",  # Yu-Gi-Oh prismatic
+    "遊戯王 20thシークレット",  # Yu-Gi-Oh 20th secret
+    "遊戯王 25thシークレット",  # Yu-Gi-Oh 25th secret
+    "遊戯王 ウルトラ 1st",  # Yu-Gi-Oh ultra rare 1st
+    "遊戯王 ゴースト",  # Yu-Gi-Oh ghost rare
+    "青眼の白龍 レリーフ",  # Blue-Eyes White Dragon relief
+    "ブラック・マジシャン シークレット",  # Dark Magician secret
     
-    # # Magic: The Gathering
-    # "magic the gathering",
+    # Pokemon (ポケモン) - High value terms
+    "ポケモンカード 旧裏面",  # Pokemon old back cards
+    "ポケカ SR 美品",  # Pokemon SR mint
+    "ポケカ HR",  # Pokemon HR
+    "ポケカ UR",  # Pokemon UR
+    "ポケカ SAR",  # Pokemon SAR
+    "ポケカ プロモ",  # Pokemon promo
+    "ポケカ 25th",  # Pokemon 25th
+    "ポケカ PSA",  # Pokemon PSA graded
+    "ポケカ リーリエ",  # Pokemon Lillie
+    "ポケカ マリィ",  # Pokemon Marnie
     
-    # # Pokemon related terms
-    # "ポケモンカード",  # Pokemon cards
-    # "ポケモン キッズ カード",  # Pokemon Kids cards
-    # "ポケモンカード カードダス",  # Pokemon Carddass
-    # "ポケモンカード スターター",  # Pokemon starter cards
-    # "ポケモンシール",  # Pokemon seals
+    # Dragon Ball (ドラゴンボール)
+    "ドラゴンボール カード",  # Dragon Ball cards
+    "ドラゴンボール プリズム",  # Dragon Ball prism
+    "ドラゴンボール レア",  # Dragon Ball rare
     
-    # # Digimon related terms
-    # "デジモンカード",  # Digimon cards
-    # "デジモン",  # Digimon general
+    # One Piece (ワンピース)
+    "ワンピース カード SR",  # One Piece card SR
+    "ワンピース カード SEC",  # One Piece card SEC
+    "ワンピース カード L",  # One Piece card Leader
+    "ワンピース プロモ",  # One Piece promo
     
-    # # Dragon Ball related terms
-    # "ドラゴンボールカード",  # Dragon Ball cards
+    # Digimon (デジモン)
+    "デジモン カード SR",  # Digimon card SR
+    "デジモン カード SEC",  # Digimon card SEC
+    "デジモン プロモ",  # Digimon promo
     
-    # # Other popular series
-    # "鬼滅の刃"  # Demon Slayer
+    # General high-value terms
+    "トレカ PSA10",  # Trading cards PSA 10
+    "トレカ BGS",  # Trading cards BGS
+    "カード 未開封",  # Unopened cards
+    "カード プロモ",  # Promo cards
+    "限定 カード",  # Limited cards
+    "大会 プロモ",  # Tournament promos
+]
+
+# Backup English terms for international comparisons
+ENGLISH_SEARCH_TERMS = [
+    "Yu-Gi-Oh! Secret Rare",
+    "Yu-Gi-Oh! Ultimate Rare", 
+    "Yu-Gi-Oh! Ghost Rare",
+    "Pokemon Card PSA",
+    "Pokemon Japanese",
+    "Dragon Ball Z Card",
+    "One Piece Card Game",
+    "Digimon Card Game"
 ] 

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if result %}{{ result.title }} - {% endif %}Enhanced Detail - Yu-Gi-Oh! Arbitrage Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .detail-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .card-image-large {
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .smart-score-large {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .analysis-card {
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .analysis-header {
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: bold;
+        }
+        .risk-badge {
+            font-size: 1rem;
+            padding: 8px 16px;
+        }
+        .risk-low { background-color: #28a745; color: white; }
+        .risk-medium { background-color: #ffc107; color: black; }
+        .risk-high { background-color: #dc3545; color: white; }
+        .trend-rising { color: #28a745; }
+        .trend-falling { color: #dc3545; }
+        .trend-stable { color: #6c757d; }
+        .authenticity-bar {
+            height: 20px;
+            border-radius: 10px;
+            background: #e9ecef;
+            overflow: hidden;
+        }
+        .authenticity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #dc3545, #ffc107, #28a745);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        .action-strong-buy {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        .action-buy {
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            color: white;
+        }
+        .action-consider {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        .action-pass {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+        }
+        .profit-positive {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .profit-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-dragon me-2"></i>Enhanced Yu-Gi-Oh! Arbitrage Bot
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-chart-line me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/search"><i class="fas fa-search me-1"></i>Search</a>
+                <a class="nav-link" href="/results"><i class="fas fa-list me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% if error %}
+        <div class="alert alert-danger">
+            <h4><i class="fas fa-exclamation-triangle me-2"></i>{{ error }}</h4>
+            <p>The requested result could not be found.</p>
+            <a href="/results" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Results
+            </a>
+        </div>
+        {% elif result %}
+        
+        <!-- Header -->
+        <div class="detail-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1>{{ result.title }}</h1>
+                    <p class="lead mb-0">
+                        <i class="fas fa-tag me-1"></i>Search Term: {{ result.search_term }}
+                        <span class="ms-3"><i class="fas fa-clock me-1"></i>{{ result.timestamp }}</span>
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="smart-score-large">
+                        {{ "%.1f"|format(result.smart_score or result.arbitrage_score or 0) }}<br>
+                        <small style="font-size: 1rem;">Smart Score</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column - Image and Basic Info -->
+            <div class="col-md-6">
+                <!-- Card Image -->
+                <div class="card analysis-card">
+                    <div class="card-header analysis-header">
+                        <i class="fas fa-image me-2"></i>Card Image
+                    </div>
+                    <div class="card-body text-center">
+                        {% if result.image_url %}
+                        <img src="{{ result.image_url }}" alt="Card Image" class="card-image-large"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none;" class="text-center p-4">
+                            <i class="fas fa-image fa-4x text-muted"></i>
+                            <p class="text-muted mt-3">Image not available</p>
+                        </div>
+                        {% else %}
+                        <div class="text-center p-4">
+                            <i class="fas fa-image fa-4x text-muted"></i>
+                            <p class="text-muted mt-3">No image available</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Basic Information -->
+                <div class="card analysis-card">
+                    <div class="card-header analysis-header">
+                        <i class="fas fa-info-circle me-2"></i>Basic Information
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Buyee Price:</strong><br>
+                                <span class="h4">¥{{ "{:,}".format(result.price_yen|int) }}</span><br>
+                                <span class="text-muted">${{ "%.2f"|format(result.price_usd or 0) }}</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>eBay Average:</strong><br>
+                                <span class="h4">${{ "%.2f"|format(result.ebay_avg_price or 0) }}</span>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Profit Margin:</strong><br>
+                                <span class="h4 {{ 'profit-positive' if (result.profit_margin or 0) >= 0 else 'profit-negative' }}">
+                                    {{ "%.1f"|format(result.profit_margin or 0) }}%
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Recommended Action:</strong><br>
+                                <span class="badge action-{{ (result.recommended_action or 'pass').lower().replace(' ', '-') }} fs-6">
+                                    {{ result.recommended_action or 'PASS' }}
+                                </span>
+                            </div>
+                        </div>
+                        {% if result.listing_url %}
+                        <div class="mt-3">
+                            <a href="{{ result.listing_url }}" target="_blank" class="btn btn-primary me-2">
+                                <i class="fas fa-external-link-alt me-1"></i>View on Buyee
+                            </a>
+                            {% if result.yahoo_url %}
+                            <a href="{{ result.yahoo_url }}" target="_blank" class="btn btn-warning">
+                                <i class="fas fa-gavel me-1"></i>View on Yahoo Auctions
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Enhanced Analysis -->
+            <div class="col-md-6">
+                {% if result.enhanced_analysis %}
+                <!-- Enhanced Card Analysis -->
+                <div class="card analysis-card">
+                    <div class="card-header analysis-header">
+                        <i class="fas fa-brain me-2"></i>Enhanced Card Analysis
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Condition:</strong><br>
+                                <span class="badge bg-success fs-6">{{ result.enhanced_analysis.condition or 'Unknown' }}</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Rarity:</strong><br>
+                                <span class="badge bg-primary fs-6">{{ result.enhanced_analysis.rarity or 'Unknown' }}</span>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Set Code:</strong><br>
+                                {{ result.enhanced_analysis.set_code or 'Unknown' }}
+                            </div>
+                            <div class="col-6">
+                                <strong>Edition:</strong><br>
+                                {{ result.enhanced_analysis.edition or 'Unknown' }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Authenticity Score:</strong>
+                            <div class="authenticity-bar mt-2">
+                                <div class="authenticity-fill" style="width: {{ (result.enhanced_analysis.authenticity_score or 0) * 100 }}%"></div>
+                            </div>
+                            <small class="text-muted">{{ "%.0f"|format((result.enhanced_analysis.authenticity_score or 0) * 100) }}% authentic</small>
+                        </div>
+                        {% if result.enhanced_analysis.condition_notes %}
+                        <div class="mb-3">
+                            <strong>Condition Notes:</strong>
+                            <ul class="mt-2">
+                                {% for note in result.enhanced_analysis.condition_notes %}
+                                <li>{{ note }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if result.enhanced_analysis.risk_factors %}
+                        <div class="mb-3">
+                            <strong>Risk Factors:</strong>
+                            <ul class="mt-2">
+                                {% for risk in result.enhanced_analysis.risk_factors %}
+                                <li class="text-warning">{{ risk }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if result.market_analysis %}
+                <!-- Market Analysis -->
+                <div class="card analysis-card">
+                    <div class="card-header analysis-header">
+                        <i class="fas fa-chart-line me-2"></i>Market Analysis
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Risk Level:</strong><br>
+                                <span class="badge risk-{{ (result.market_analysis.risk_level or 'medium').lower() }} fs-6">
+                                    {{ result.market_analysis.risk_level or 'Unknown' }}
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Risk Score:</strong><br>
+                                {{ "%.2f"|format(result.market_analysis.risk_score or 0) }}
+                            </div>
+                        </div>
+                        {% if result.market_analysis.risk_factors %}
+                        <div class="mb-3">
+                            <strong>Risk Factors:</strong>
+                            <ul class="mt-2">
+                                {% for risk in result.market_analysis.risk_factors %}
+                                <li class="text-danger">{{ risk }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if result.price_prediction %}
+                <!-- Price Prediction -->
+                <div class="card analysis-card">
+                    <div class="card-header analysis-header">
+                        <i class="fas fa-crystal-ball me-2"></i>Price Prediction
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <strong>Trend Direction:</strong><br>
+                                <span class="trend-{{ result.price_prediction.direction or 'stable' }}">
+                                    <i class="fas fa-{{ 'arrow-up' if result.price_prediction.direction == 'rising' else 'arrow-down' if result.price_prediction.direction == 'falling' else 'minus' }} me-1"></i>
+                                    {{ (result.price_prediction.direction or 'stable')|title }}
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Expected Change:</strong><br>
+                                {{ "%.1f"|format(result.price_prediction.percentage_change or 0) }}%
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Confidence:</strong><br>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ (result.price_prediction.confidence or 0) * 100 }}%">
+                                    {{ "%.0f"|format((result.price_prediction.confidence or 0) * 100) }}%
+                                </div>
+                            </div>
+                        </div>
+                        {% if result.price_prediction.factors %}
+                        <div class="mb-3">
+                            <strong>Key Factors:</strong>
+                            <ul class="mt-2">
+                                {% for factor in result.price_prediction.factors %}
+                                <li>{{ factor|title }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mt-4">
+            <div class="col-12 text-center">
+                <a href="/results" class="btn btn-secondary me-3">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Results
+                </a>
+                {% if result.listing_url %}
+                <a href="{{ result.listing_url }}" target="_blank" class="btn btn-primary me-3">
+                    <i class="fas fa-shopping-cart me-1"></i>Buy on Buyee
+                </a>
+                {% endif %}
+                <button class="btn btn-info" onclick="shareResult()">
+                    <i class="fas fa-share me-1"></i>Share Result
+                </button>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="alert alert-warning">
+            <h4><i class="fas fa-exclamation-triangle me-2"></i>No Result Data</h4>
+            <p>No result data was provided.</p>
+            <a href="/results" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Results
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function shareResult() {
+            if (navigator.share) {
+                navigator.share({
+                    title: '{{ result.title if result else "Card Result" }}',
+                    text: 'Check out this Yu-Gi-Oh! card arbitrage opportunity',
+                    url: window.location.href
+                });
+            } else {
+                // Fallback: copy to clipboard
+                navigator.clipboard.writeText(window.location.href).then(function() {
+                    alert('Link copied to clipboard!');
+                });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Search - Yu-Gi-Oh! Arbitrage Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .search-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+        .search-form {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .search-tips {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .tip-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+        }
+        .popular-searches {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .search-tag {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-tag:hover {
+            background: #0056b3;
+            color: white;
+            text-decoration: none;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 9999;
+        }
+        .loading-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+        }
+        .feature-highlight {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-dragon me-2"></i>Enhanced Yu-Gi-Oh! Arbitrage Bot
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-chart-line me-1"></i>Dashboard</a>
+                <a class="nav-link active" href="/search"><i class="fas fa-search me-1"></i>Search</a>
+                <a class="nav-link" href="/results"><i class="fas fa-list me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner-border text-light mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4>Analyzing Cards with Enhanced AI...</h4>
+            <p id="loadingMessage">Searching for arbitrage opportunities...</p>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <!-- Header Section -->
+        <div class="search-section text-center">
+            <h1><i class="fas fa-search me-3"></i>Enhanced Card Search</h1>
+            <p class="lead mb-0">Find profitable Yu-Gi-Oh! card arbitrage opportunities with smart analysis</p>
+        </div>
+
+        <!-- Feature Highlights -->
+        <div class="feature-highlight text-center">
+            <h4><i class="fas fa-brain me-2"></i>Enhanced Features</h4>
+            <div class="row">
+                <div class="col-md-3">
+                    <i class="fas fa-image fa-2x mb-2"></i>
+                    <p>Thumbnail Display</p>
+                </div>
+                <div class="col-md-3">
+                    <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                    <p>Risk Assessment</p>
+                </div>
+                <div class="col-md-3">
+                    <i class="fas fa-chart-trend-up fa-2x mb-2"></i>
+                    <p>Market Trends</p>
+                </div>
+                <div class="col-md-3">
+                    <i class="fas fa-gem fa-2x mb-2"></i>
+                    <p>Condition Analysis</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Form -->
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="search-form">
+                    <h3 class="text-center mb-4">Search for Cards</h3>
+                    <form id="searchForm">
+                        <div class="mb-3">
+                            <label for="searchTerm" class="form-label">Card Name or Keywords</label>
+                            <input type="text" class="form-control form-control-lg" id="searchTerm" 
+                                   placeholder="e.g., Blue-Eyes White Dragon, Dark Magician, LOB-001" required>
+                            <div class="form-text">Enter card names, set codes, or keywords</div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="maxResults" class="form-label">Maximum Results</label>
+                                <select class="form-select" id="maxResults">
+                                    <option value="10">10 results</option>
+                                    <option value="20" selected>20 results</option>
+                                    <option value="50">50 results</option>
+                                    <option value="100">100 results</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="searchType" class="form-label">Search Type</label>
+                                <select class="form-select" id="searchType">
+                                    <option value="specific">Specific Search</option>
+                                    <option value="all">Category-wide Search</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg px-5">
+                                <i class="fas fa-search me-2"></i>Start Enhanced Search
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Popular Searches -->
+        <div class="popular-searches">
+            <h4><i class="fas fa-fire me-2"></i>Popular Searches</h4>
+            <p class="text-muted">Click on any tag to search instantly</p>
+            <div class="text-center">
+                <!-- Yu-Gi-Oh Japanese terms -->
+                <span class="search-tag" onclick="quickSearch('遊戯王 初期 美品')">遊戯王 初期 美品</span>
+                <span class="search-tag" onclick="quickSearch('遊戯王 レリーフ')">遊戯王 レリーフ</span>
+                <span class="search-tag" onclick="quickSearch('遊戯王 シークレット')">遊戯王 シークレット</span>
+                <span class="search-tag" onclick="quickSearch('青眼の白龍 レリーフ')">青眼の白龍 レリーフ</span>
+                <span class="search-tag" onclick="quickSearch('遊戯王 プリズマティック')">遊戯王 プリズマティック</span>
+                
+                <!-- Pokemon Japanese terms -->
+                <span class="search-tag" onclick="quickSearch('ポケモンカード 旧裏面')">ポケモンカード 旧裏面</span>
+                <span class="search-tag" onclick="quickSearch('ポケカ SR 美品')">ポケカ SR 美品</span>
+                <span class="search-tag" onclick="quickSearch('ポケカ リーリエ')">ポケカ リーリエ</span>
+                <span class="search-tag" onclick="quickSearch('ポケカ PSA')">ポケカ PSA</span>
+                
+                <!-- Other popular terms -->
+                <span class="search-tag" onclick="quickSearch('ワンピース カード SR')">ワンピース カード SR</span>
+                <span class="search-tag" onclick="quickSearch('ドラゴンボール カード')">ドラゴンボール カード</span>
+                <span class="search-tag" onclick="quickSearch('トレカ PSA10')">トレカ PSA10</span>
+                <span class="search-tag" onclick="quickSearch('限定 カード')">限定 カード</span>
+                <span class="search-tag" onclick="quickSearch('大会 プロモ')">大会 プロモ</span>
+            </div>
+        </div>
+
+        <!-- Search Tips -->
+        <div class="search-tips">
+            <h4><i class="fas fa-lightbulb me-2"></i>Search Tips</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="tip-item">
+                        <strong>遊戯王 (Yu-Gi-Oh!):</strong> Use "遊戯王 シークレット", "遊戯王 レリーフ", "青眼の白龍"
+                    </div>
+                    <div class="tip-item">
+                        <strong>ポケモン (Pokemon):</strong> Try "ポケカ SR", "ポケモンカード 旧裏面", "ポケカ リーリエ"
+                    </div>
+                    <div class="tip-item">
+                        <strong>状態 (Condition):</strong> Add "美品" (mint), "PSA10", "BGS" for graded cards
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="tip-item">
+                        <strong>レアリティ (Rarity):</strong> Search "シークレット", "ウルトラ", "スーパー", "プリズマティック"
+                    </div>
+                    <div class="tip-item">
+                        <strong>プロモ (Promo):</strong> Use "プロモ", "大会", "限定", "特典" for special cards
+                    </div>
+                    <div class="tip-item">
+                        <strong>その他 (Others):</strong> Try "ワンピース", "ドラゴンボール", "デジモン" for other TCGs
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Searches -->
+        <div id="recentSearches" style="display: none;">
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-history me-2"></i>Recent Searches</h5>
+                </div>
+                <div class="card-body" id="recentSearchList">
+                    <!-- Recent searches will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Search form submission
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            performSearch();
+        });
+
+        function performSearch() {
+            const searchTerm = document.getElementById('searchTerm').value.trim();
+            const maxResults = parseInt(document.getElementById('maxResults').value);
+            const searchType = document.getElementById('searchType').value;
+            
+            if (!searchTerm) {
+                alert('Please enter a search term');
+                return;
+            }
+
+            // Show loading overlay
+            showLoading();
+            
+            // Save to recent searches
+            saveRecentSearch(searchTerm);
+            
+            const searchData = {
+                search_term: searchTerm,
+                max_results: maxResults,
+                search_all: searchType === 'all'
+            };
+
+            fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(searchData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert(`Search completed! Found ${data.results_count} results. Redirecting to results page...`);
+                    window.location.href = '/results';
+                } else {
+                    alert('Search failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                alert('Error: ' + error.message);
+            });
+        }
+
+        function quickSearch(term) {
+            document.getElementById('searchTerm').value = term;
+            performSearch();
+        }
+
+        function showLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            const messages = [
+                'Analyzing card conditions...',
+                'Extracting thumbnails...',
+                'Checking authenticity...',
+                'Calculating smart scores...',
+                'Assessing market trends...',
+                'Finding arbitrage opportunities...'
+            ];
+            
+            overlay.style.display = 'block';
+            
+            let messageIndex = 0;
+            const messageInterval = setInterval(() => {
+                document.getElementById('loadingMessage').textContent = messages[messageIndex];
+                messageIndex = (messageIndex + 1) % messages.length;
+            }, 2000);
+            
+            // Store interval ID for cleanup
+            overlay.messageInterval = messageInterval;
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'none';
+            
+            // Clear message interval
+            if (overlay.messageInterval) {
+                clearInterval(overlay.messageInterval);
+                overlay.messageInterval = null;
+            }
+        }
+
+        function saveRecentSearch(searchTerm) {
+            let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+            
+            // Remove if already exists
+            recentSearches = recentSearches.filter(search => search !== searchTerm);
+            
+            // Add to beginning
+            recentSearches.unshift(searchTerm);
+            
+            // Keep only last 5
+            recentSearches = recentSearches.slice(0, 5);
+            
+            localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
+            updateRecentSearchesDisplay();
+        }
+
+        function updateRecentSearchesDisplay() {
+            const recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+            const container = document.getElementById('recentSearches');
+            const list = document.getElementById('recentSearchList');
+            
+            if (recentSearches.length > 0) {
+                container.style.display = 'block';
+                list.innerHTML = recentSearches.map(search => 
+                    `<span class="search-tag" onclick="quickSearch('${search}')">${search}</span>`
+                ).join('');
+            }
+        }
+
+        // Load recent searches on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateRecentSearchesDisplay();
+        });
+
+        // Allow Enter key to submit form
+        document.getElementById('searchTerm').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performSearch();
+            }
+        });
+    </script>
+</body>
+</html>
