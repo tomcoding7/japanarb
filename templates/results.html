@@ -235,15 +235,25 @@
                 const profitClass = result.profit_margin >= 0 ? 'profit-positive' : 'profit-negative';
                 const actionClass = `action-${result.recommended_action.toLowerCase().replace(' ', '-')}`;
                 const detailUrl = `/result/${result.id}`;
+                
+                // Create enhanced image display
+                let imageHtml = '';
+                if (result.display_image) {
+                    imageHtml = `
+                        <div class="position-relative">
+                            <img src="${result.display_image}" alt="Card Thumbnail" class="card-img-top" style="max-height:180px; object-fit:contain; background:#f8f9fa; border-bottom:1px solid #eee;" onerror="this.parentElement.innerHTML='<div class=\\'text-center p-3\\' style=\\'background:#f8f9fa; border-bottom:1px solid #eee;\\'><i class=\\'fas fa-image fa-2x text-muted\\'></i><p class=\\'text-muted small mt-2\\'>Image Unavailable</p></div>'" loading="lazy">
+                            ${result.image_count > 1 ? `<div class="position-absolute top-0 end-0 m-2"><span class="badge bg-dark">+${result.image_count - 1}</span></div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    imageHtml = '<div class="text-center p-3" style="background:#f8f9fa; border-bottom:1px solid #eee;"><i class="fas fa-image fa-2x text-muted"></i><p class="text-muted small mt-2">No Image Available</p></div>';
+                }
+                
                 html += `
                     <div class="col-md-6 col-lg-4">
                         <a href="${detailUrl}" style="text-decoration: none; color: inherit;">
                         <div class="card card-listing">
-                            ${result.image_url ? `<img src="${result.image_url}" alt="Card Thumbnail" class="card-img-top" style="max-height:180px; object-fit:contain; background:#f8f9fa; border-bottom:1px solid #eee;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" loading="lazy">
-                            <div class="text-center p-3" style="display:none; background:#f8f9fa; border-bottom:1px solid #eee;">
-                                <i class="fas fa-image fa-2x text-muted"></i>
-                                <p class="text-muted small mt-2">No Image Available</p>
-                            </div>` : '<div class="text-center p-3" style="background:#f8f9fa; border-bottom:1px solid #eee;"><i class="fas fa-image fa-2x text-muted"></i><p class="text-muted small mt-2">No Image Available</p></div>'}
+                            ${imageHtml}
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <span class="badge score-badge ${actionClass}">
                                     ${result.recommended_action}

@@ -437,12 +437,19 @@ class CardArbitrageTool:
         return promising_listings
 
     def scrape_buyee_listings(self, keyword: str, max_results: int = 20) -> List[CardListing]:
-        """Scrape card listings from Buyee."""
+        """Scrape listings from Buyee with enhanced image extraction and auction filtering."""
         listings = []
+        
         try:
             # Construct search URL
-            search_url = f"https://buyee.jp/item/search/query/{keyword}"
+            search_url = f"https://buyee.jp/item/search?keyword={quote(keyword)}&translationType=1"
+            logger.info(f"Searching Buyee for: {keyword}")
+            
             self.driver.get(search_url)
+            time.sleep(3)  # Wait for page to load
+            
+            # Handle cookie popup if present
+            self.handle_cookie_popup()
             
             # Wait for results to load
             WebDriverWait(self.driver, 10).until(
@@ -454,28 +461,19 @@ class CardArbitrageTool:
             
             for item in items:
                 try:
+                    # Check if this is a finished auction
+                    if self.is_finished_auction(item):
+                        logger.info(f"Skipping finished auction: {item.text[:50]}...")
+                        continue
+                    
                     # Extract basic information
                     title = item.find_element(By.CSS_SELECTOR, "div.itemCard__itemName").text.strip()
                     price_text = item.find_element(By.CSS_SELECTOR, ".itemCard__itemInfo .g-price").text.strip()
                     price_yen = Decimal(re.sub(r'[^\d.]', '', price_text))
-                    # Try multiple selectors for image URL
-                    image_url = None
-                    image_selectors = [
-                        "img.lazyLoadV2.g-thumbnail__image",
-                        "img.g-thumbnail__image",
-                        "img[class*='thumbnail']",
-                        "img"
-                    ]
                     
-                    for selector in image_selectors:
-                        try:
-                            img_element = item.find_element(By.CSS_SELECTOR, selector)
-                            src = img_element.get_attribute("src") or img_element.get_attribute("data-src")
-                            if src and 'noimage' not in src.lower() and 'placeholder' not in src.lower():
-                                image_url = src
-                                break
-                        except NoSuchElementException:
-                            continue
+                    # Enhanced image extraction with multiple fallbacks
+                    image_url = self.extract_image_url_enhanced(item)
+                    
                     listing_url = item.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
                     
                     # Get condition if available
@@ -516,6 +514,191 @@ class CardArbitrageTool:
         except Exception as e:
             logger.error(f"Error scraping Buyee listings: {str(e)}")
             return []
+
+    def is_finished_auction(self, item_element) -> bool:
+        """Check if an item represents a finished auction."""
+        try:
+            # Get the item's text content
+            item_text = item_element.text.lower()
+            
+            # Keywords that indicate finished auctions (expanded list)
+            finished_keywords = [
+                '終了', 'ended', 'finished', 'closed', 'sold', '落札', '落札済み',
+                'auction ended', 'auction closed', 'auction finished',
+                'このオークションは終了しました', 'this auction has ended',
+                'finish', 'complete', 'completed', 'sold out', 'no longer available',
+                'expired', 'time up', 'time expired', 'bidding ended'
+            ]
+            
+            # Check for finished keywords in the text
+            for keyword in finished_keywords:
+                if keyword in item_text:
+                    logger.info(f"Found finished auction keyword: '{keyword}' in item text")
+                    return True
+            
+            # Check for specific elements within the item that indicate finished auctions
+            finished_selectors = [
+                "span.auction-ended",
+                "div.finished-auction",
+                "span[class*='ended']",
+                "div[class*='finished']",
+                "span[class*='closed']",
+                "span.g-text--attention",  # This is the specific class for "Finished" status
+                "div[class*='expired']",
+                "span[class*='sold']",
+                "div[class*='complete']"
+            ]
+            
+            for selector in finished_selectors:
+                try:
+                    element = item_element.find_element(By.CSS_SELECTOR, selector)
+                    if element.is_displayed():
+                        element_text = element.text.lower()
+                        logger.info(f"Found finished auction element with text: '{element_text}'")
+                        return True
+                except NoSuchElementException:
+                    continue
+            
+            # Additional check for specific Buyee finished auction indicators
+            try:
+                # Look for status indicators
+                status_elements = item_element.find_elements(By.CSS_SELECTOR, "[class*='status'], [class*='state'], [class*='condition']")
+                for status_elem in status_elements:
+                    status_text = status_elem.text.lower()
+                    if any(keyword in status_text for keyword in ['finished', 'ended', 'closed', 'complete', 'expired']):
+                        logger.info(f"Found finished status: '{status_text}'")
+                        return True
+            except Exception:
+                pass
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking auction status: {str(e)}")
+            return False
+
+    def extract_image_url_enhanced(self, item_element) -> str:
+        """Extract image URL with enhanced selectors and fallbacks."""
+        # Multiple selectors for images with priority order (expanded list)
+        image_selectors = [
+            "img.lazyLoadV2.g-thumbnail__image",
+            "img[data-testid='item-card-image']",
+            "div.itemCard__image img",
+            "div.item-image img",
+            "img.item-image",
+            "img.g-thumbnail__image",
+            "img[class*='thumbnail']",
+            "img[class*='thumb']",
+            "img[class*='photo']",
+            "img[class*='picture']",
+            "img[data-src]",
+            "img[data-original]",
+            "img[data-lazy]",
+            "img[data-srcset]",  # Handle srcset attributes
+            "img[loading='lazy']",  # Handle lazy loading images
+            "img[class*='card']",  # Handle card-related image classes
+            "img[class*='item']",  # Handle item-related image classes
+            "img[class*='product']",  # Handle product-related image classes
+            "img[class*='auction']",  # Handle auction-related image classes
+            "img"  # Fallback to any image
+        ]
+        
+        for selector in image_selectors:
+            try:
+                img_elements = item_element.find_elements(By.CSS_SELECTOR, selector)
+                
+                for img_element in img_elements:
+                    # Try multiple attributes for image URL
+                    src = img_element.get_attribute('src')
+                    data_src = img_element.get_attribute('data-src')
+                    data_original = img_element.get_attribute('data-original')
+                    data_lazy = img_element.get_attribute('data-lazy')
+                    data_srcset = img_element.get_attribute('data-srcset')
+                    
+                    # Use the first valid URL found
+                    image_url = src or data_src or data_original or data_lazy
+                    
+                    # Handle srcset if no direct src found
+                    if not image_url and data_srcset:
+                        # Extract first URL from srcset
+                        srcset_urls = data_srcset.split(',')
+                        if srcset_urls:
+                            first_url = srcset_urls[0].strip().split(' ')[0]
+                            if first_url:
+                                image_url = first_url
+                    
+                    if image_url and 'noimage' not in image_url.lower() and 'placeholder' not in image_url.lower():
+                        # Process the URL to ensure it's accessible
+                        processed_url = self.process_image_url(image_url)
+                        logger.info(f"Found image using selector '{selector}': {processed_url}")
+                        return processed_url
+                        
+            except NoSuchElementException:
+                continue
+            except Exception as e:
+                logger.warning(f"Error with image selector '{selector}': {str(e)}")
+                continue
+        
+        # If no images found with selectors, try JavaScript to get all images
+        try:
+            js_images = item_element.find_element(By.TAG_NAME, "div").find_elements(By.TAG_NAME, "img")
+            for img in js_images:
+                src = img.get_attribute('src') or img.get_attribute('data-src')
+                if src and 'noimage' not in src.lower() and 'placeholder' not in src.lower():
+                    processed_url = self.process_image_url(src)
+                    logger.info(f"Found image via JavaScript: {processed_url}")
+                    return processed_url
+        except Exception as e:
+            logger.warning(f"Error with JavaScript image extraction: {str(e)}")
+        
+        logger.warning("No valid image found for item")
+        return ""
+
+    def process_image_url(self, url: str) -> str:
+        """Process image URL to ensure it's accessible."""
+        try:
+            # Handle relative URLs
+            if url.startswith('//'):
+                url = 'https:' + url
+            elif url.startswith('/'):
+                url = 'https://buyee.jp' + url
+            
+            # Handle Buyee CDN URLs
+            if 'buyee.jp' in url and 'cdn' not in url:
+                # Try to convert to CDN URL if possible
+                url = url.replace('buyee.jp', 'buyee.jp/cdn')
+            
+            return url
+            
+        except Exception as e:
+            logger.warning(f"Error processing image URL {url}: {str(e)}")
+            return url
+
+    def handle_cookie_popup(self):
+        """Handle cookie consent popup if present."""
+        try:
+            cookie_selectors = [
+                "button[data-testid='cookie-accept']",
+                "button.accept-cookies",
+                "button.cookie-accept",
+                "button[class*='cookie']",
+                "button[class*='accept']",
+                "button[class*='consent']"
+            ]
+            
+            for selector in cookie_selectors:
+                try:
+                    cookie_button = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    cookie_button.click()
+                    logger.info("Cookie popup handled")
+                    time.sleep(2)
+                    break
+                except TimeoutException:
+                    continue
+        except Exception as e:
+            logger.debug(f"No cookie popup found or error handling it: {str(e)}")
 
     def analyze_listings(self, listings: List[CardListing]) -> List[CardListing]:
         """Analyze listings and calculate potential profits."""

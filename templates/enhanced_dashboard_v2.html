@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Yu-Gi-Oh! Arbitrage Dashboard v2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --light-bg: #f8f9fa;
+            --dark-bg: #2c3e50;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin: 20px;
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .stats-section {
+            margin-bottom: 40px;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-card h4 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .stats-card p {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .search-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 40px;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .search-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .filter-section h5 {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+
+        .filter-group label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 10px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+        }
+
+        .results-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-listing {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .card-listing:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-img-top {
+            height: 200px;
+            object-fit: cover;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border: none;
+            padding: 15px 20px;
+        }
+
+        .score-badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .action-strong-buy {
+            background: var(--success-color) !important;
+        }
+
+        .action-buy {
+            background: var(--secondary-color) !important;
+        }
+
+        .action-hold {
+            background: var(--warning-color) !important;
+        }
+
+        .action-sell {
+            background: var(--danger-color) !important;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .profit-positive {
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        .profit-negative {
+            color: var(--danger-color);
+            font-weight: 600;
+        }
+
+        .btn-outline-primary {
+            border-color: var(--secondary-color);
+            color: var(--secondary-color);
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--secondary-color);
+            border-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-warning {
+            border-color: var(--warning-color);
+            color: var(--warning-color);
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-warning:hover {
+            background: var(--warning-color);
+            border-color: var(--warning-color);
+            transform: translateY(-2px);
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .no-results i {
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--secondary-color);
+        }
+
+        .loading i {
+            font-size: 2rem;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .image-gallery {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+        }
+
+        .image-count-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .image-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            color: #999;
+        }
+
+        .image-placeholder i {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            color: #155724;
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+            color: #721c24;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                margin: 10px;
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .search-form {
+                flex-direction: column;
+            }
+
+            .search-input {
+                min-width: auto;
+                width: 100%;
+            }
+
+            .filter-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-search-dollar me-3"></i>Enhanced Yu-Gi-Oh! Arbitrage Dashboard</h1>
+            <p>Superior to manual Buyee searching - Find the best deals with intelligent filtering and enhanced image display</p>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-section">
+            <div class="row">
+                <div class="col-md-3 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="total-listings">0</h4>
+                        <p><i class="fas fa-list me-2"></i>Total Listings</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="profitable-listings">0</h4>
+                        <p><i class="fas fa-chart-line me-2"></i>Profitable</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="strong-buys">0</h4>
+                        <p><i class="fas fa-star me-2"></i>Strong Buys</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="items-with-images">0</h4>
+                        <p><i class="fas fa-image me-2"></i>With Images</p>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-4 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="avg-score">0</h4>
+                        <p><i class="fas fa-trophy me-2"></i>Avg Score</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="avg-profit-margin">0%</h4>
+                        <p><i class="fas fa-percentage me-2"></i>Avg Profit Margin</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <div class="stats-card">
+                        <h4 id="total-value">$0</h4>
+                        <p><i class="fas fa-dollar-sign me-2"></i>Total Value</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <h5><i class="fas fa-search me-2"></i>Start New Search</h5>
+            <div class="search-form">
+                <input type="text" id="searchInput" class="search-input" placeholder="Enter search term (e.g., 'Blue-Eyes White Dragon', 'Dark Magician')" list="searchTerms">
+                <datalist id="searchTerms">
+                    <option value="Blue-Eyes White Dragon">
+                    <option value="Dark Magician">
+                    <option value="Red-Eyes Black Dragon">
+                    <option value="Exodia">
+                    <option value="Black Luster Soldier">
+                    <option value="Chaos Emperor Dragon">
+                </datalist>
+                <button onclick="startSearch()" class="search-btn">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+            </div>
+            <div id="searchStatus" class="mt-3"></div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+            <h5><i class="fas fa-filter me-2"></i>Advanced Filters</h5>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="minScore">Min Score:</label>
+                    <input type="number" id="minScore" value="0" min="0" max="100" step="0.1">
+                </div>
+                <div class="filter-group">
+                    <label for="maxPrice">Max Price ($):</label>
+                    <input type="number" id="maxPrice" placeholder="No limit" min="0">
+                </div>
+                <div class="filter-group">
+                    <label for="minProfit">Min Profit %:</label>
+                    <input type="number" id="minProfit" value="0" min="0" step="0.1">
+                </div>
+                <div class="filter-group">
+                    <label for="actionFilter">Action:</label>
+                    <select id="actionFilter">
+                        <option value="">All Actions</option>
+                        <option value="STRONG BUY">Strong Buy</option>
+                        <option value="BUY">Buy</option>
+                        <option value="HOLD">Hold</option>
+                        <option value="SELL">Sell</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="searchTermFilter">Search Term:</label>
+                    <select id="searchTermFilter">
+                        <option value="">All Terms</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="hasImages">Has Images:</label>
+                    <select id="hasImages">
+                        <option value="">All Items</option>
+                        <option value="true">With Images</option>
+                        <option value="false">Without Images</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="conditionFilter">Condition:</label>
+                    <select id="conditionFilter">
+                        <option value="">All Conditions</option>
+                        <option value="mint">Mint</option>
+                        <option value="near mint">Near Mint</option>
+                        <option value="excellent">Excellent</option>
+                        <option value="good">Good</option>
+                        <option value="light played">Light Played</option>
+                        <option value="played">Played</option>
+                        <option value="poor">Poor</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button onclick="applyFilters()" class="btn btn-primary" style="padding: 10px 20px;">
+                        <i class="fas fa-filter me-2"></i>Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="results-section">
+            <h5><i class="fas fa-list me-2"></i>Results (<span id="results-count">0</span> items)</h5>
+            <div id="results-container">
+                <div class="no-results">
+                    <i class="fas fa-search fa-3x mb-3"></i>
+                    <h4>No results found</h4>
+                    <p>Start a search to find valuable Yu-Gi-Oh! cards with arbitrage opportunities.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentResults = [];
+
+        function startSearch() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            if (!searchTerm) {
+                showAlert('Please enter a search term', 'danger');
+                return;
+            }
+
+            showAlert(`Starting search for "${searchTerm}"...`, 'success');
+            
+            fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    search_term: searchTerm
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    // Wait a bit then load results
+                    setTimeout(() => {
+                        loadResults();
+                    }, 2000);
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert(`Error: ${error.message}`, 'danger');
+            });
+        }
+
+        function showAlert(message, type) {
+            const statusDiv = document.getElementById('searchStatus');
+            statusDiv.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        function loadResults() {
+            const minScore = document.getElementById('minScore').value;
+            const maxPrice = document.getElementById('maxPrice').value;
+            const minProfit = document.getElementById('minProfit').value;
+            const actionFilter = document.getElementById('actionFilter').value;
+            const searchTerm = document.getElementById('searchTermFilter').value;
+            const hasImages = document.getElementById('hasImages').value;
+            const conditionFilter = document.getElementById('conditionFilter').value;
+            
+            const params = new URLSearchParams({
+                min_score: minScore,
+                min_profit: minProfit
+            });
+            
+            if (maxPrice) params.append('max_price', maxPrice);
+            if (actionFilter) params.append('action_filter', actionFilter);
+            if (searchTerm) params.append('search_term', searchTerm);
+            if (hasImages) params.append('has_images', hasImages);
+            if (conditionFilter) params.append('condition_filter', conditionFilter);
+            
+            // Show loading
+            document.getElementById('results-container').innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading results...</p>
+                </div>
+            `;
+            
+            fetch(`/api/results?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentResults = data.results;
+                        displayResults(data.results);
+                        updateStats();
+                    } else {
+                        document.getElementById('results-container').innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.message}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('results-container').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        function displayResults(results) {
+            const container = document.getElementById('results-container');
+            document.getElementById('results-count').textContent = results.length;
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="no-results">
+                        <i class="fas fa-search fa-3x mb-3"></i>
+                        <h4>No results found</h4>
+                        <p>Try adjusting your filters or search for different cards.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `<div class="row">`;
+            
+            results.forEach(result => {
+                const profitClass = result.profit_margin >= 0 ? 'profit-positive' : 'profit-negative';
+                const actionClass = `action-${result.recommended_action.toLowerCase().replace(' ', '-')}`;
+                const detailUrl = `/result/${result.id}`;
+                
+                // Create image display
+                let imageHtml = '';
+                if (result.display_image) {
+                    imageHtml = `
+                        <div class="image-gallery">
+                            <img src="${result.display_image}" alt="Card Image" class="card-img-top" 
+                                 onerror="this.parentElement.innerHTML='<div class=\\'image-placeholder\\'><i class=\\'fas fa-image\\'></i><p>Image Unavailable</p></div>'">
+                            ${result.image_count > 1 ? `<div class="image-count-badge">+${result.image_count - 1}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    imageHtml = `
+                        <div class="image-placeholder">
+                            <i class="fas fa-image"></i>
+                            <p>No Image Available</p>
+                        </div>
+                    `;
+                }
+                
+                html += `
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <a href="${detailUrl}" style="text-decoration: none; color: inherit;">
+                        <div class="card card-listing">
+                            ${imageHtml}
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span class="badge score-badge ${actionClass}">
+                                    ${result.recommended_action}
+                                </span>
+                                <span class="badge bg-primary">
+                                    Score: ${result.arbitrage_score}
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <h6 class="card-title">${result.title}</h6>
+                                <p class="card-text text-muted small">
+                                    <i class="fas fa-tag me-1"></i>${result.search_term}
+                                </p>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Buyee Price:</small><br>
+                                        <strong>¥${result.price_yen || result.price || 0}</strong><br>
+                                        <small class="text-muted">($${result.price_usd || 0})</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">eBay Avg:</small><br>
+                                        <strong class="${profitClass}">$${result.ebay_avg_price || 0}</strong>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Profit:</small><br>
+                                        <span class="${profitClass}">${result.profit_margin || 0}%</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Condition:</small><br>
+                                        <span>${result.condition || 'Unknown'}</span>
+                                    </div>
+                                </div>
+                                ${result.url ? `
+                                    <div class="mt-3">
+                                        <a href="${result.url}" target="_blank" class="btn btn-outline-primary btn-sm me-2" onclick="event.stopPropagation(); event.preventDefault(); window.open('${result.url}', '_blank'); return false;">
+                                            <i class="fas fa-external-link-alt me-1"></i>View on Buyee
+                                        </a>
+                                        ${result.yahoo_url ? `<a href="${result.yahoo_url}" target="_blank" class="btn btn-outline-warning btn-sm" onclick="event.stopPropagation(); event.preventDefault(); window.open('${result.yahoo_url}', '_blank'); return false;"><i class='fas fa-gavel me-1'></i>View on Yahoo Auctions</a>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        </a>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+        
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('total-listings').textContent = stats.total_listings;
+                        document.getElementById('profitable-listings').textContent = stats.profitable_listings;
+                        document.getElementById('strong-buys').textContent = stats.strong_buys;
+                        document.getElementById('avg-score').textContent = stats.avg_score;
+                        document.getElementById('avg-profit-margin').textContent = stats.avg_profit_margin + '%';
+                        document.getElementById('total-value').textContent = '$' + stats.total_value.toLocaleString();
+                        document.getElementById('items-with-images').textContent = stats.items_with_images;
+                    }
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+        
+        function applyFilters() {
+            loadResults();
+        }
+        
+        function loadSearchTerms() {
+            fetch('/api/search_terms')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('searchTermFilter');
+                        select.innerHTML = '<option value="">All Terms</option>';
+                        data.search_terms.forEach(term => {
+                            select.innerHTML += `<option value="${term}">${term}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading search terms:', error));
+        }
+        
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadResults();
+            loadSearchTerms();
+            updateStats();
+        });
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadResults, 30000);
+        
+        // Enter key to search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startSearch();
+            }
+        });
+    </script>
+</body>
+</html>

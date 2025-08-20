@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Fast Arbitrage Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: #ff6b6b !important;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .urgent-card {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .opportunity-card {
+            border: 1px solid #dee2e6;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            background: white;
+        }
+        .opportunity-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .profit-high {
+            color: #00b894;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .profit-medium {
+            color: #fdcb6e;
+            font-weight: bold;
+        }
+        .profit-low {
+            color: #e17055;
+            font-weight: bold;
+        }
+        .risk-low {
+            color: #00b894;
+        }
+        .risk-medium {
+            color: #fdcb6e;
+        }
+        .risk-high {
+            color: #e17055;
+        }
+        .card-image {
+            max-height: 150px;
+            max-width: 100%;
+            object-fit: contain;
+            border-radius: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .search-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+        }
+        .btn-urgent {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-bolt me-2"></i>Ultra-Fast Arbitrage Bot
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/opportunities">
+                    <i class="fas fa-search me-1"></i>Opportunities
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Stats Section -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h4><i class="fas fa-chart-line me-2"></i>Total Opportunities</h4>
+                    <h2 id="totalOpportunities">0</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h4><i class="fas fa-star me-2"></i>High Profit</h4>
+                    <h2 id="highProfitOpportunities">0</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h4><i class="fas fa-percentage me-2"></i>Avg Profit</h4>
+                    <h2 id="avgProfitMargin">0%</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="urgent-card">
+                    <h4><i class="fas fa-clock me-2"></i>Urgent</h4>
+                    <h2 id="urgentOpportunities">0</h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <h4><i class="fas fa-search me-2"></i>Quick Search</h4>
+            <div class="row">
+                <div class="col-md-8">
+                    <input type="text" class="form-control" id="searchInput" 
+                           placeholder="Enter search terms (comma separated)">
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100" onclick="performSearch()">
+                        <i class="fas fa-bolt me-1"></i>Ultra-Fast Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Urgent Opportunities -->
+        <div id="urgentSection" style="display: none;">
+            <h4><i class="fas fa-exclamation-triangle me-2 text-danger"></i>Urgent Opportunities</h4>
+            <div id="urgentOpportunitiesList" class="row"></div>
+        </div>
+
+        <!-- Top Opportunities -->
+        <h4><i class="fas fa-trophy me-2"></i>Top Opportunities</h4>
+        <div id="opportunitiesList" class="row">
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 class="mt-3">Loading opportunities...</h5>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('totalOpportunities').textContent = data.stats.total_opportunities;
+                        document.getElementById('highProfitOpportunities').textContent = data.stats.high_profit_opportunities;
+                        document.getElementById('avgProfitMargin').textContent = data.stats.avg_profit_margin.toFixed(1) + '%';
+                        document.getElementById('urgentOpportunities').textContent = data.stats.urgent_opportunities;
+                    }
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+
+        function loadOpportunities() {
+            fetch('/api/opportunities?min_profit=30')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayOpportunities(data.opportunities);
+                    }
+                })
+                .catch(error => console.error('Error loading opportunities:', error));
+        }
+
+        function loadUrgentOpportunities() {
+            fetch('/api/urgent')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.count > 0) {
+                        displayUrgentOpportunities(data.urgent);
+                        document.getElementById('urgentSection').style.display = 'block';
+                    }
+                })
+                .catch(error => console.error('Error loading urgent opportunities:', error));
+        }
+
+        function displayOpportunities(opportunities) {
+            const container = document.getElementById('opportunitiesList');
+            
+            if (opportunities.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5>No opportunities found</h5>
+                        <p class="text-muted">Try adjusting your search criteria or wait for new opportunities.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            opportunities.slice(0, 8).forEach(opp => {
+                const profitClass = opp.profit_margin > 70 ? 'profit-high' : 
+                                  opp.profit_margin > 40 ? 'profit-medium' : 'profit-low';
+                const riskClass = opp.risk_score < 0.3 ? 'risk-low' : 
+                                opp.risk_score < 0.6 ? 'risk-medium' : 'risk-high';
+                
+                html += `
+                    <div class="col-md-6 col-lg-3">
+                        <div class="opportunity-card p-3">
+                            <div class="text-center mb-3">
+                                <img src="${opp.image_url}" alt="Card" class="card-image" 
+                                     onerror="this.src='https://via.placeholder.com/150x200/4ecdc4/ffffff?text=Card'">
+                            </div>
+                            <h6 class="card-title">${opp.title}</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Japanese:</small><br>
+                                    <strong>¥${opp.japanese_price.toLocaleString()}</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">International:</small><br>
+                                    <strong>$${opp.international_price.toFixed(2)}</strong>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-6">
+                                    <small class="text-muted">Profit:</small><br>
+                                    <span class="${profitClass}">${opp.profit_margin.toFixed(1)}%</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Risk:</small><br>
+                                    <span class="${riskClass}">${(opp.risk_score * 100).toFixed(0)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <a href="${opp.source_url}" target="_blank" class="btn btn-sm btn-primary w-100">
+                                    <i class="fas fa-external-link-alt me-1"></i>View Deal
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function displayUrgentOpportunities(urgent) {
+            const container = document.getElementById('urgentOpportunitiesList');
+            
+            let html = '';
+            urgent.forEach(opp => {
+                const hours = Math.floor(opp.time_to_expire / 3600);
+                const minutes = Math.floor((opp.time_to_expire % 3600) / 60);
+                
+                html += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="opportunity-card p-3 border-danger">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h6 class="card-title">${opp.title}</h6>
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-clock me-1"></i>${hours}h ${minutes}m
+                                </span>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Japanese:</small><br>
+                                    <strong>¥${opp.japanese_price.toLocaleString()}</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Profit:</small><br>
+                                    <span class="profit-high">${opp.profit_margin.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <a href="${opp.source_url}" target="_blank" class="btn btn-sm btn-urgent w-100">
+                                    <i class="fas fa-external-link-alt me-1"></i>Act Now!
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function performSearch() {
+            const searchInput = document.getElementById('searchInput').value;
+            if (!searchInput.trim()) {
+                alert('Please enter search terms');
+                return;
+            }
+
+            const searchTerms = searchInput.split(',').map(term => term.trim()).filter(term => term);
+            
+            fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    search_terms: searchTerms
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Found ${data.opportunities_count} opportunities!`);
+                    loadOpportunities();
+                    loadStats();
+                } else {
+                    alert('Search failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                alert('Search failed. Please try again.');
+            });
+        }
+
+        // Load data on page load
+        loadStats();
+        loadOpportunities();
+        loadUrgentOpportunities();
+
+        // Refresh data every 30 seconds
+        setInterval(() => {
+            loadStats();
+            loadUrgentOpportunities();
+        }, 30000);
+
+        // Refresh opportunities every 2 minutes
+        setInterval(() => {
+            loadOpportunities();
+        }, 120000);
+    </script>
+</body>
+</html>
+

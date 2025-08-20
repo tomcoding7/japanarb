@@ -16,6 +16,7 @@ import threading
 import time
 from card_arbitrage import CardArbitrageTool
 from search_terms import SEARCH_TERMS
+import requests
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -37,15 +38,29 @@ class WebArbitrageInterface:
         self.load_results()
     
     def add_results(self, search_term: str, results: List[Dict]):
-        """Add new search results and save to disk"""
+        """Add new search results with enhanced image processing"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        enhanced_results = []
         for result in results:
-            result['search_term'] = search_term
-            result['timestamp'] = timestamp
-            result['id'] = f"{search_term}_{len(self.results)}"
+            # Process images for display
+            processed_images = self.process_images_for_display(result.get('image_url', ''))
+            
+            # Enhanced result with processed images
+            enhanced_result = {
+                **result,
+                'search_term': search_term,
+                'timestamp': timestamp,
+                'id': f"{search_term}_{len(self.results)}",
+                'processed_images': processed_images,
+                'display_image': self.get_best_display_image(processed_images),
+                'image_count': len(processed_images),
+                'has_images': len(processed_images) > 0
+            }
+            
+            enhanced_results.append(enhanced_result)
         
-        self.results.extend(results)
+        self.results.extend(enhanced_results)
         if search_term not in self.search_terms:
             self.search_terms.append(search_term)
         self.save_results()
@@ -66,10 +81,23 @@ class WebArbitrageInterface:
             logger.error(f"Error saving results to disk: {e}")
 
     def load_results(self):
+        def convert(obj):
+            if isinstance(obj, dict):
+                return {k: convert(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [convert(i) for i in obj]
+            if isinstance(obj, str) and obj.replace('.', '').replace('-', '').isdigit():
+                try:
+                    return float(obj)
+                except:
+                    return obj
+            return obj
+            
         try:
             if os.path.exists(SAVED_RESULTS_PATH):
                 with open(SAVED_RESULTS_PATH, 'r', encoding='utf-8') as f:
-                    self.results = json.load(f)
+                    loaded_data = json.load(f)
+                self.results = convert(loaded_data)
                 logger.info(f"Loaded {len(self.results)} results from disk.")
         except Exception as e:
             logger.error(f"Error loading results from disk: {e}")
@@ -124,6 +152,10 @@ class WebArbitrageInterface:
         
         df = pd.DataFrame(self.results)
         
+        # Convert Decimal to float for calculations
+        df['profit_margin'] = df['profit_margin'].astype(float)
+        df['arbitrage_score'] = df['arbitrage_score'].astype(float)
+        
         return {
             'total_listings': len(df),
             'profitable_listings': len(df[df['profit_margin'] > 0]),
@@ -134,6 +166,111 @@ class WebArbitrageInterface:
             'avg_profit_margin': round(df['profit_margin'].mean(), 2),
             'total_profit_potential': round(df['profit_margin'].sum(), 2)
         }
+
+    def process_images_for_display(self, image_url: str) -> List[Dict[str, Any]]:
+        """Process image URL for optimal display in the web interface"""
+        processed_images = []
+        
+        if not image_url or 'noimage' in image_url.lower():
+            return processed_images
+        
+        try:
+            # Create processed image info
+            processed_img = {
+                'url': image_url,
+                'index': 0,
+                'processed_url': self.process_image_url(image_url),
+                'thumbnail_url': self.create_thumbnail_url(image_url),
+                'is_valid': True,
+                'display_url': self.get_display_url(image_url)
+            }
+            
+            processed_images.append(processed_img)
+            
+        except Exception as e:
+            logger.warning(f"Error processing image {image_url}: {str(e)}")
+        
+        return processed_images
+
+    def process_image_url(self, url: str) -> str:
+        """Process image URL to ensure it's accessible"""
+        try:
+            # Handle relative URLs
+            if url.startswith('//'):
+                url = 'https:' + url
+            elif url.startswith('/'):
+                url = 'https://buyee.jp' + url
+            
+            # Handle Buyee CDN URLs
+            if 'buyee.jp' in url and 'cdn' not in url:
+                # Try to convert to CDN URL if possible
+                url = url.replace('buyee.jp', 'buyee.jp/cdn')
+            
+            return url
+            
+        except Exception as e:
+            logger.warning(f"Error processing image URL {url}: {str(e)}")
+            return url
+
+    def create_thumbnail_url(self, image_url: str) -> str:
+        """Create a thumbnail URL for the image"""
+        try:
+            # For Buyee images, try to get thumbnail version
+            if 'buyee.jp' in image_url:
+                # Try different thumbnail patterns
+                thumbnail_patterns = [
+                    image_url.replace('/original/', '/thumbnail/'),
+                    image_url.replace('/large/', '/thumbnail/'),
+                    image_url + '?size=thumbnail',
+                    image_url + '&size=thumbnail'
+                ]
+                
+                for pattern in thumbnail_patterns:
+                    try:
+                        response = requests.head(pattern, timeout=3)
+                        if response.status_code == 200:
+                            return pattern
+                    except Exception:
+                        continue
+            
+            return image_url
+            
+        except Exception as e:
+            logger.warning(f"Error creating thumbnail URL for {image_url}: {str(e)}")
+            return image_url
+
+    def get_display_url(self, image_url: str) -> str:
+        """Get the best URL for display"""
+        try:
+            # Try processed URL first
+            processed_url = self.process_image_url(image_url)
+            if processed_url != image_url:
+                return processed_url
+            
+            # Fall back to original URL
+            return image_url
+            
+        except Exception as e:
+            logger.warning(f"Error getting display URL for {image_url}: {str(e)}")
+            return image_url
+
+    def get_best_display_image(self, processed_images: List[Dict[str, Any]]) -> str:
+        """Get the best image URL for primary display"""
+        try:
+            if not processed_images:
+                return ""
+            
+            # Prefer processed URLs
+            for img in processed_images:
+                if img.get('processed_url') and img['processed_url'] != img.get('url'):
+                    return img['processed_url']
+            
+            # Fall back to first valid image
+            return processed_images[0].get('display_url', '')
+            
+        except Exception as e:
+            logger.warning(f"Error getting best display image: {str(e)}")
+            return ""
 
 # Global interface instance
 interface = WebArbitrageInterface()
@@ -191,11 +328,11 @@ def api_search():
 
         # Import here to avoid circular imports
         from card_arbitrage import CardArbitrageTool
-        from buyee_scraper import BuyeeScraper
+        from enhanced_buyee_scraper import EnhancedBuyeeScraper
         results = []
         if search_all:
             # Use category-wide search for 'yugioh' (can be expanded)
-            scraper = BuyeeScraper(output_dir='scraped_results', max_pages=5, headless=True, use_llm=False)
+            scraper = EnhancedBuyeeScraper(output_dir='enhanced_scraped_results', max_pages=5, headless=True, use_llm=False)
             category_urls = scraper.get_category_urls('yugioh')
             for category_url in category_urls:
                 results.extend(scraper.search_by_category(category_url))
